@@ -680,19 +680,37 @@ function smallRow(n) {
   return `<div class="lrow ${sel ? 'sel' : ''}" data-go="${n.id}" data-card="1" role="button" tabindex="0">${S.sel ? `<span class="check">${ic('check')}</span>` : ''}<img class="lt" src="${thumbUrl(n)}" alt="" loading="lazy">
     <div class="mid"><div class="nm ${n.name ? '' : 'none'}">${n.fav ? '<span class="star">★</span> ' : ''}${esc(n.name || 'ไม่มีชื่อ')}</div>${sub}<div class="meta">${badgesHtml(n)}</div></div>${S.sel ? '' : ic('right')}</div>`;
 }
+const LISTTAB = 'stuff-finder:listtab';
+S.listTab = (() => { try { return localStorage.getItem(LISTTAB) === 'box' ? 'box' : 'item'; } catch { return 'item'; } })();
+S.listQ = '';
+function listResults() {
+  const terms = S.listQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const hit = n => !terms.length || terms.every(t => [n.name, n.kind, ...(n.tags || []), ...ancestors(n.id).map(label)].join(' ').toLowerCase().includes(t));
+  const byFav = (a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
+  if (S.listTab === 'item') {
+    const items = [...S.nodes.values()].filter(n => n.type === 'item' && hit(n))
+      .sort((a, b) => byFav(a, b) || (a.name || '').localeCompare(b.name || '', 'th'));
+    if (!items.length) return `<div class="empty"><div class="big">${ic(terms.length ? 'search' : 'tag')}</div><h3>${terms.length ? 'ไม่พบของที่ค้นหา' : 'ยังไม่มีของ'}</h3><p>${terms.length ? 'ลองใช้คำสั้นลง' : 'ไปหน้าแรกกด “เพิ่ม” เพื่อถ่ายรูปของชิ้นแรก'}</p></div>`;
+    return `<div class="list">${items.map(x => miniItem(x, true)).join('')}</div>`;
+  }
+  const boxes = [...S.nodes.values()].filter(n => n.type === 'box' && hit(n))
+    .sort((a, b) => byFav(a, b) || pathStr(a).localeCompare(pathStr(b), 'th'));
+  if (!boxes.length) return `<div class="empty"><div class="big">${ic(terms.length ? 'search' : 'box')}</div><h3>${terms.length ? 'ไม่พบที่เก็บที่ค้นหา' : 'ยังไม่มีตู้ กล่อง หรือถุง'}</h3><p>${terms.length ? 'ลองใช้คำสั้นลง' : 'สร้างที่หน้าแรกก่อน แล้วกลับมาดูว่าข้างในมีอะไรบ้างที่นี่'}</p></div>`;
+  return `<p style="color:var(--muted);margin:0 2px 8px">แตะเพื่อดูของทั้งหมดข้างใน</p><div class="list">${boxes.map(b => {
+    const c = itemsUnder(b.id).length, a = alertCount(b.id), anc = ancestors(b.id).map(label).join(' › ');
+    return `<div class="lrow" data-gol="${b.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(b)}" alt="" loading="lazy">
+      <div class="mid"><div class="nm">${b.fav ? '<span class="star">★</span> ' : ''}${esc(label(b))}${b.kind && b.kind !== b.name && !(b.name || '').startsWith(b.kind) ? ` <small style="color:var(--muted);font-weight:400">${esc(b.kind)}</small>` : ''}</div>
+      <div class="sub" style="color:var(--muted);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${anc ? 'อยู่ใน ' + esc(anc) : 'ชั้นนอกสุด'}</div>
+      <div class="meta"><span class="badge">${c} ชิ้น</span>${a ? `<span class="badge bad">${ic('alert')} ใกล้หมดอายุ ${a}</span>` : ''}</div></div>${ic('right')}</div>`;
+  }).join('')}</div>`;
+}
 function pageList() {
-  const boxes = [...S.nodes.values()].filter(n => n.type === 'box')
-    .sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || pathStr(a).localeCompare(pathStr(b), 'th'));
-  const head = `<div class="top"><div class="brand"><div class="logo">${ic('list')}</div><h1>รายการในที่เก็บ</h1></div></div>`;
-  if (!boxes.length) return head + `<div class="empty"><div class="big">${ic('box')}</div><h3>ยังไม่มีตู้ กล่อง หรือถุง</h3><p>สร้างที่หน้าแรกก่อน แล้วกลับมาดูว่าข้างในมีอะไรบ้างที่นี่</p></div>`;
-  return head + `<p style="color:var(--muted);margin:0 2px 6px">แตะตู้ กล่อง หรือถุง เพื่อดูของทั้งหมดข้างในเป็นรายการ</p>
-    <div class="list">${boxes.map(b => {
-      const c = itemsUnder(b.id).length, a = alertCount(b.id), anc = ancestors(b.id).map(label).join(' › ');
-      return `<div class="lrow" data-gol="${b.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(b)}" alt="" loading="lazy">
-        <div class="mid"><div class="nm">${b.fav ? '<span class="star">★</span> ' : ''}${esc(label(b))}${b.kind && b.kind !== b.name && !(b.name || '').startsWith(b.kind) ? ` <small style="color:var(--muted);font-weight:400">${esc(b.kind)}</small>` : ''}</div>
-        <div class="sub" style="color:var(--muted);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${anc ? 'อยู่ใน ' + esc(anc) : 'ชั้นนอกสุด'}</div>
-        <div class="meta"><span class="badge">${c} ชิ้น</span>${a ? `<span class="badge bad">${ic('alert')} ใกล้หมดอายุ ${a}</span>` : ''}</div></div>${ic('right')}</div>`;
-    }).join('')}</div>`;
+  const all = [...S.nodes.values()];
+  const ni = all.filter(n => n.type === 'item').length, nb = all.length - ni;
+  return `<div class="top"><div class="brand"><div class="logo">${ic('list')}</div><h1>รายการ</h1></div>
+    <div class="tabs" style="margin-bottom:10px"><button data-act="ltab" data-tab="item" class="${S.listTab === 'item' ? 'on' : ''}">ของ <small>${ni}</small></button><button data-act="ltab" data-tab="box" class="${S.listTab === 'box' ? 'on' : ''}">ที่เก็บ <small>${nb}</small></button></div>
+    <div class="search">${ic('search')}<input id="lq" type="text" enterkeyhint="search" placeholder="${S.listTab === 'item' ? 'ค้นหาในรายการของ…' : 'ค้นหาตู้ กล่อง ถุง…'}" value="${esc(S.listQ)}" autocomplete="off" autocapitalize="off"></div></div>
+    <div id="lres">${listResults()}</div>`;
 }
 function pageListOf(id) {
   const n = S.nodes.get(id);
@@ -891,6 +909,11 @@ const A = {
     toast(n.fav ? 'เอาออกจากรายการโปรดแล้ว' : 'ติดดาวแล้ว จะขึ้นที่หน้าแรก');
     render({ keep: true });
   },
+  ltab: d => {
+    S.listTab = d.tab === 'box' ? 'box' : 'item'; S.listQ = '';
+    try { localStorage.setItem(LISTTAB, S.listTab); } catch { /* storage blocked */ }
+    render();
+  },
   tagf: d => { S.tagFilter = S.tagFilter === d.tag ? null : d.tag; render({ keep: true }); },
   clearq: () => { S.focusQ = true; location.hash = '#/s'; },
   selstart: () => { S.sel = new Set(); render({ keep: true }); },
@@ -953,6 +976,7 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-go][role=button],[data-gol][role=button]')) { e.preventDefault(); e.target.click(); }
 });
 document.addEventListener('input', e => {
+  if (e.target.id === 'lq') { S.listQ = e.target.value; $('#lres').innerHTML = listResults(); return; }
   if (e.target.id !== 'q') return;
   const v = e.target.value, enc = '#/s/' + encodeURIComponent(v);
   if (S.route.name === 'search') {
@@ -965,7 +989,7 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'q') e.target.blur(); });
 
-window.addEventListener('hashchange', () => { S.sel = null; if (route().name === 'search' && !S.route?.q && route().q === '') S.focusQ = true; render(); });
+window.addEventListener('hashchange', () => { S.sel = null; if (route().name !== 'list') S.listQ = ''; if (route().name === 'search' && !S.route?.q && route().q === '') S.focusQ = true; render(); });
 
 /* a thumbnail that fails to decode is rebuilt from the full photo, once per item */
 const healed = new Set();
