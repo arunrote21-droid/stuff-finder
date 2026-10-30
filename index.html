@@ -5,7 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>ของอยู่ไหน — สมุดจดที่เก็บของ</title>
 <meta name="description" content="ถ่ายรูปของ กล่อง ตู้ แล้วจัดซ้อนกันเหมือนโฟลเดอร์ ค้นหาแล้วรู้ทันทีว่าของอยู่ตรงไหน">
-<meta name="theme-color" content="#0f766e">
+<meta name="theme-color" content="#bfe6cc">
+<script>
+// apply the saved color mode before first paint so there is no flash
+try { var t = localStorage.getItem('stuff-finder:theme'); if (t === 'gray' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
+</script>
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">

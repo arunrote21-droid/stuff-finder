@@ -750,9 +750,19 @@ function pageExp() {
       : `<div class="empty"><div class="big">${ic('cal')}</div><h3>ยังไม่มีของที่ระบุวันหมดอายุ</h3><p>ตอนเพิ่มของ ใส่วันหมดอายุไว้ แล้วหน้านี้จะเรียงให้ว่าอะไรต้องรีบใช้ก่อน</p></div>`}`;
 }
 
+const THEMES = { light: ['ขาว', '#bfe6cc'], gray: ['เทา', '#a3b5aa'], dark: ['ดำ', '#0f3d2a'] };
+const THEMEKEY = 'stuff-finder:theme';
+const curTheme = () => document.documentElement.dataset.theme || 'light';
+function setTheme(t) {
+  if (t === 'light') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = t;
+  try { localStorage.setItem(THEMEKEY, t); } catch { /* storage blocked */ }
+  $('meta[name="theme-color"]')?.setAttribute('content', THEMES[t][1]);
+}
 function pageSettings() {
   return `<div class="top"><div class="brand"><div class="logo">${ic('gear')}</div><h1>ตั้งค่าและสำรองข้อมูล</h1></div></div>
     <div class="settings">
+      <div class="card2"><h3>โหมดสี</h3><p>เลือกความสว่างของหน้าจอ</p>
+        <div class="tabs" style="margin-bottom:0">${Object.entries(THEMES).map(([k, [n]]) => `<button data-act="theme" data-t="${k}" class="${curTheme() === k ? 'on' : ''}">${n}</button>`).join('')}</div></div>
       <div class="card2"><h3>พื้นที่ที่ใช้</h3><p id="usage">กำลังคำนวณ…</p></div>
       <div class="card2"><h3>สำรองข้อมูล</h3><p>ข้อมูลและรูปทั้งหมดเก็บอยู่ในเครื่องนี้เท่านั้น (ไม่ได้อัปโหลดที่ไหน) ควรสำรองเป็นไฟล์เก็บไว้เป็นระยะ เผลอล้างข้อมูลเบราว์เซอร์จะได้ไม่หาย</p>
         <div class="actions" style="margin-top:0"><button class="btn primary" data-act="export" id="bExp">${ic('download')} ดาวน์โหลดไฟล์สำรอง</button><button class="btn" data-act="import">${ic('upload')} นำเข้าจากไฟล์สำรอง</button></div></div>
@@ -877,6 +887,7 @@ const A = {
     toast(n.fav ? 'เอาออกจากรายการโปรดแล้ว' : 'ติดดาวแล้ว จะขึ้นที่หน้าแรก');
     render({ keep: true });
   },
+  theme: d => { setTheme(d.t); render({ keep: true }); },
   ltab: d => {
         S.listTab = d.tab === 'box' ? 'box' : 'item'; S.listQ = '';
     try { localStorage.setItem(LISTTAB, S.listTab); } catch { /* storage blocked */ }
@@ -1029,6 +1040,7 @@ document.addEventListener('error', async e => {
     $('#app').innerHTML = `<div class="empty"><div class="big">${ic('alert')}</div><h3>เปิดที่เก็บข้อมูลไม่ได้</h3><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p></div>`;
     return;
   }
+  $('meta[name="theme-color"]')?.setAttribute('content', THEMES[curTheme()][1]);
   if (route().name === 'search') S.focusQ = true;
   render();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
