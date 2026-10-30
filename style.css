@@ -260,3 +260,16 @@ button.chip{border:0;cursor:pointer}
 .lrow .check{position:static;flex:none;border-color:var(--muted);background:var(--surface2)}
 .lrow.sel .check{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 .field .chip,.sheet .chip{padding:6px 14px}
+
+/* favorites: tall portrait cards, three across, swipe sideways for more */
+.favrow{display:grid;grid-auto-flow:column;grid-auto-columns:calc((100% - 20px) / 3);gap:10px;overflow-x:auto;scroll-snap-type:x mandatory;padding:2px 2px 8px;margin:0 -2px;scrollbar-width:none}
+.favrow::-webkit-scrollbar{display:none}
+.favrow .card{scroll-snap-align:start;border-radius:14px}
+.favrow .card .ph{aspect-ratio:3/4}
+.favrow .card .body{padding:6px 8px 9px;min-height:0}
+.favrow .card .nm{font-size:.86rem;-webkit-line-clamp:2}
+.favrow .card .sub{font-size:.72rem}
+.favrow .tag{font-size:.64rem;padding:1px 6px;gap:3px}
+.favrow .tag .i{width:.9em;height:.9em}
+.favrow .tag.tl{top:5px;left:5px}.favrow .tag.tr{top:5px;right:5px}.favrow .tag.bl{bottom:5px;left:5px}
+.favrow .check{top:5px;left:5px;width:22px;height:22px}

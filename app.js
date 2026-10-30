@@ -622,7 +622,7 @@ function pageHome() {
   } else {
     const exp = alertItems().sort((a, b) => a.expiry.localeCompare(b.expiry));
     body = `${exp.length ? `<div class="sec"><h2>${ic('alert')} ของใกล้หมดอายุ <small>${exp.length}</small></h2>${exp.length > 5 ? `<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>` : ''}</div><div class="list">${exp.slice(0, 5).map(n => miniItem(n, true)).join('')}</div>` : ''}
-      ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="grid ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
+      ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="favrow ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
       ${gridSection(null, true)}`;
   }
   return `<div class="top"><div class="brand"><div class="logo">${ic('box')}</div><h1>ของอยู่ไหน</h1></div>${searchBox()}</div>
