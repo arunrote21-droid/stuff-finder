@@ -33,6 +33,7 @@ const ICONS = {
   alert: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
   select: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   layers: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>',
+  refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
 };
 const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
@@ -761,6 +762,13 @@ const A = {
     await DB.clear(); S.urls.forEach(u => URL.revokeObjectURL(u.url)); S.urls.clear(); S.nodes.clear(); reindex();
     location.hash = '#/'; render(); toast('ลบทั้งหมดแล้ว');
   },
+  async reset(d, el) {
+    // reload the screen with the latest version; saved items and photos are untouched
+    el.classList.add('spinning');
+    try { await Promise.all((await caches.keys()).map(k => caches.delete(k))); } catch { /* no cache API */ }
+    try { await Promise.all((await navigator.serviceWorker.getRegistrations()).map(r => r.unregister())); } catch { /* no SW */ }
+    location.reload();
+  },
   toastact: () => { $('#toast').classList.remove('show'); S.toastFn?.(); },
 };
 
@@ -797,6 +805,10 @@ window.addEventListener('hashchange', () => { S.sel = null; if (route().name ===
 (async function boot() {
   const nav = document.createElement('nav'); nav.className = 'nav'; nav.id = 'nav'; nav.setAttribute('aria-label', 'เมนูหลัก');
   document.body.append(nav);
+  const rb = document.createElement('button');
+  rb.className = 'resetbtn'; rb.dataset.act = 'reset'; rb.title = 'รีเฟรชหน้าจอ'; rb.setAttribute('aria-label', 'รีเฟรชหน้าจอ');
+  rb.innerHTML = ic('refresh');
+  document.body.append(rb);
   try {
     await DB.open();
     (await DB.all()).forEach(n => S.nodes.set(n.id, n));
