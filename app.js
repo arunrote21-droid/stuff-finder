@@ -73,8 +73,23 @@ const DB = {
   clear: () => DB.run(['nodes', 'photos'], 'readwrite', (ns, ps) => { ns.clear(); ps.clear(); }),
 };
 
+/* ───────────── tag list (choices shown as tap-to-pick chips) ───────────── */
+const DEFAULT_TAGS = ['อาหารสด', 'อาหารแห้ง', 'เครื่องมือ', 'ดนตรี', 'อุปกรณ์ที่สอน', 'ของใช้ส่วนตัว', 'ของใช้ที่สอน'];
+const TAGKEY = 'stuff-finder:tags';
+let tagList = [];
+const saveTags = () => { try { localStorage.setItem(TAGKEY, JSON.stringify(tagList)); } catch { /* storage blocked */ } };
+function initTags() {
+  let v = null;
+  try { v = JSON.parse(localStorage.getItem(TAGKEY)); } catch { /* none yet */ }
+  if (Array.isArray(v)) { tagList = v; return; }
+  // first run: defaults plus any free-text tags already used on items
+  tagList = [...DEFAULT_TAGS];
+  for (const n of S.nodes.values()) (n.tags || []).forEach(t => { if (!tagList.includes(t)) tagList.push(t); });
+  saveTags();
+}
+
 /* ───────────── state & tree ───────────── */
-const S = { nodes: new Map(), kids: new Map(), urls: new Map(), sel: null, route: null, focusQ: false, toastFn: null };
+const S = { tagFilter: null, nodes: new Map(), kids: new Map(), urls: new Map(), sel: null, route: null, focusQ: false, toastFn: null };
 
 const label = n => n.name || (n.type === 'box' ? 'ไม่มีชื่อ' : 'ไม่มีชื่อ');
 const cmp = (a, b) => (a.type !== b.type ? (a.type === 'box' ? -1 : 1) : (a.name || '').localeCompare(b.name || '', 'th') || a.created - b.created);
@@ -318,6 +333,7 @@ function openForm(opts = {}) {
     parent: ex ? ex.parent : (opts.parent || null),
     photo: ex ? { url: thumbUrl(ex), isNew: false } : null,
     kind: ex?.kind || '', autoName: '',
+    tags: [...(ex?.tags || [])], manage: false, pendingDel: null,
   };
   const lock = !!ex || opts.lockType;
   const exclude = ex ? new Set([ex.id, ...descendants(ex.id).map(x => x.id)]) : new Set();
@@ -340,7 +356,9 @@ function openForm(opts = {}) {
         <div class="actions" style="margin-top:8px;gap:6px">${[['+3 วัน', 3], ['+1 สัปดาห์', 7], ['+1 เดือน', 30], ['+6 เดือน', 182], ['+1 ปี', 365]].map(([t, v]) => `<button type="button" class="chip" data-add="${v}">${t}</button>`).join('')}<button type="button" class="chip" data-add="0" style="background:var(--surface2);color:var(--muted)">ล้าง</button></div>
       </div>
     </div>
-    <div class="field"><label for="ft">แท็ก <span style="color:var(--muted);font-weight:400">(คั่นด้วยเครื่องหมายจุลภาค)</span></label><input id="ft" placeholder="เช่น เครื่องมือ, ซ่อมบ้าน" value="${esc((ex?.tags || []).join(', '))}"></div>
+    <div class="field"><label>แท็ก <button type="button" class="linkbtn" id="tagManage">จัดการแท็ก</button></label>
+      <div class="actions" id="tagChips" style="margin-top:0;gap:6px"></div>
+      <div style="display:flex;gap:8px;margin-top:8px"><input id="ftNew" placeholder="พิมพ์แท็กใหม่ แล้วกด + เพิ่ม" maxlength="30" style="flex:1;width:auto"><button type="button" class="btn" id="tagAdd" style="height:46px;padding:0 16px">${ic('plus')} เพิ่ม</button></div></div>
     <div class="field"><label for="fo">บันทึกเพิ่มเติม</label><textarea id="fo" placeholder="ยี่ห้อ ขนาด รายละเอียดที่อยากจำ">${esc(ex?.note || '')}</textarea></div>
     <div class="field"><label>เก็บไว้ที่ <span style="color:var(--muted);font-weight:400">(แตะเพื่อเลือก หรือสร้างกล่อง/ชั้นใหม่พร้อมถ่ายรูป)</span></label>
       <button type="button" class="btn block" id="loc" style="height:auto;min-height:46px;padding:8px 16px;justify-content:space-between;text-align:left"><span id="locT"></span>${ic('right')}</button></div>
@@ -369,7 +387,27 @@ function openForm(opts = {}) {
     if (!d.photo) paintDrop();
   };
   const paintLoc = () => { $f('#locT').textContent = locText(d.parent); };
-  paintDrop(); paintType(); paintLoc();
+  const paintTags = () => {
+    const all = [...new Set([...tagList, ...d.tags])];
+    $f('#tagChips').innerHTML = all.length ? all.map(t => {
+      if (!d.manage) return `<button type="button" class="chip ${d.tags.includes(t) ? 'on' : ''}" data-tag="${esc(t)}">${esc(t)}</button>`;
+      return d.pendingDel === t
+        ? `<button type="button" class="chip danger" data-deltag="${esc(t)}">แตะอีกครั้งเพื่อลบ “${esc(t)}”</button>`
+        : `<button type="button" class="chip" data-deltag="${esc(t)}">${esc(t)} <span class="tx">✕</span></button>`;
+    }).join('') : '<span style="color:var(--muted);font-size:.9rem">ยังไม่มีแท็ก พิมพ์เพิ่มด้านล่างได้เลย</span>';
+    $f('#tagManage').textContent = d.manage ? 'เสร็จ' : 'จัดการแท็ก';
+  };
+  const addTag = () => {
+    const inp = $f('#ftNew'), t = inp.value.trim().replace(/^#/, '');
+    if (!t) return;
+    const hit = [...tagList, ...d.tags].find(x => x.toLowerCase() === t.toLowerCase());
+    const name = hit || t;
+    if (!tagList.includes(name)) { tagList.push(name); saveTags(); }
+    if (!d.tags.includes(name)) d.tags.push(name);
+    inp.value = ''; paintTags();
+  };
+  $f('#ftNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
+  paintDrop(); paintType(); paintLoc(); paintTags();
 
   s.el.addEventListener('click', async e => {
     const t = e.target.closest('[data-t]');
@@ -386,6 +424,18 @@ function openForm(opts = {}) {
         dr.classList.remove('err');
       } catch { toast('อ่านรูปนี้ไม่ได้ ลองรูปอื่นนะ'); }
       paintDrop();
+      return;
+    }
+    const tg = e.target.closest('[data-tag]');
+    if (tg) { const t = tg.dataset.tag; d.tags = d.tags.includes(t) ? d.tags.filter(x => x !== t) : [...d.tags, t]; paintTags(); return; }
+    if (e.target.closest('#tagManage')) { d.manage = !d.manage; d.pendingDel = null; paintTags(); return; }
+    if (e.target.closest('#tagAdd')) { addTag(); return; }
+    const dt = e.target.closest('[data-deltag]');
+    if (dt) {
+      const t = dt.dataset.deltag;
+      if (d.pendingDel === t) { tagList = tagList.filter(x => x !== t); d.tags = d.tags.filter(x => x !== t); d.pendingDel = null; saveTags(); }
+      else { d.pendingDel = t; setTimeout(() => { if (d.pendingDel === t) { d.pendingDel = null; paintTags(); } }, 3000); }
+      paintTags();
       return;
     }
     const kb = e.target.closest('[data-kind]');
@@ -426,7 +476,7 @@ function openForm(opts = {}) {
     Object.assign(n, {
       type: d.type, parent: d.parent || null, name, updated: now, kind: d.type === 'box' ? d.kind : '',
       note: $f('#fo').value.trim(),
-      tags: [...new Set($f('#ft').value.split(/[,，\n]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean))],
+      tags: [...d.tags],
       qty: d.type === 'item' ? Math.max(0, num($f('#fq').value)) : 0,
       unit: d.type === 'item' ? $f('#fu').value.trim() : '',
       expiry: d.type === 'item' ? ($f('#fe').value || '') : '',
@@ -513,7 +563,7 @@ function crumbsHtml(id) {
   return `<div class="crumbs"><a class="crumb home" href="#/">${ic('home')}<span>ทั้งหมด</span></a>${a.map(x => `${ic('right', 'sep')}<span class="crumb" data-go="${x.id}"><img class="dot" src="${thumbUrl(x)}" alt=""><span>${esc(label(x))}</span></span>`).join('')}${ic('right', 'sep')}<span class="crumb cur"><img class="dot" src="${thumbUrl(cur)}" alt=""><span>${esc(label(cur))}</span></span></div>`;
 }
 
-function gridSection(parentId) {
+function gridSection(parentId, compact = false) {
   const k = children(parentId);
   const here = parentId ? S.nodes.get(parentId) : null;
   if (!k.length) {
@@ -524,18 +574,32 @@ function gridSection(parentId) {
   }
   return `<div class="sec"><h2>${here ? 'ข้างใน' : 'ที่เก็บและของทั้งหมด'} <small>${k.length} รายการ</small></h2>
     <button class="badge" data-act="${S.sel ? 'selcancel' : 'selstart'}" style="padding:5px 12px">${S.sel ? 'ยกเลิกเลือก' : `${ic('select')} เลือกหลายอัน`}</button></div>
-    <div class="grid ${S.sel ? 'selmode' : ''}">${k.map(cardHtml).join('')}</div>`;
+    ${compact ? `<div class="list">${k.map(smallRow).join('')}</div>` : `<div class="grid ${S.sel ? 'selmode' : ''}">${k.map(cardHtml).join('')}</div>`}`;
 }
 
 function pageHome() {
   const all = [...S.nodes.values()];
   const items = all.filter(n => n.type === 'item').length, boxes = all.length - items, al = alertItems().length;
   const favs = all.filter(n => n.fav).sort(cmp);
+  const count = new Map();
+  all.forEach(n => (n.tags || []).forEach(t => count.set(t, (count.get(t) || 0) + 1)));
+  const order = [...tagList, ...[...count.keys()].filter(t => !tagList.includes(t))].filter(t => count.has(t));
+  if (S.tagFilter && !count.has(S.tagFilter)) S.tagFilter = null;
+  const tagRow = order.length ? `<div class="tagrow">${order.map(t => `<button class="chip ${S.tagFilter === t ? 'on' : ''}" data-act="tagf" data-tag="${esc(t)}">${esc(t)} <small>${count.get(t)}</small></button>`).join('')}</div>` : '';
+  let body;
+  if (S.tagFilter) {
+    const res = all.filter(n => (n.tags || []).includes(S.tagFilter)).sort(cmp);
+    body = `<div class="sec"><h2>แท็ก “${esc(S.tagFilter)}” <small>${res.length} รายการ</small></h2><button class="badge" data-act="tagf" data-tag="${esc(S.tagFilter)}" style="padding:5px 12px">${ic('x')} ล้างตัวกรอง</button></div><div class="list">${res.map(n => rowHtml(n)).join('')}</div>`;
+  } else {
+    const exp = alertItems().sort((a, b) => a.expiry.localeCompare(b.expiry));
+    body = `${exp.length ? `<div class="sec"><h2>${ic('alert')} ของใกล้หมดอายุ <small>${exp.length}</small></h2>${exp.length > 5 ? `<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>` : ''}</div><div class="list">${exp.slice(0, 5).map(n => miniItem(n, true)).join('')}</div>` : ''}
+      ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="grid ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
+      ${gridSection(null, true)}`;
+  }
   return `<div class="top"><div class="brand"><div class="logo">${ic('box')}</div><h1>ของอยู่ไหน</h1></div>${searchBox()}</div>
     ${all.length ? `<div class="stats"><div class="stat"><b>${items}</b><small>ของทั้งหมด</small></div><div class="stat"><b>${boxes}</b><small>กล่อง / ที่เก็บ</small></div>
-      <a class="stat ${al ? 'alert' : ''}" href="#/exp"><b>${al}</b><small>ใกล้หมดอายุ</small></a></div>` : ''}
-    ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="grid ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
-    ${gridSection(null)}`;
+      <a class="stat ${al ? 'alert' : ''}" href="#/exp"><b>${al}</b><small>ใกล้หมดอายุ</small></a></div>${tagRow}` : ''}
+    ${body}`;
 }
 
 function pageNode(id) {
@@ -576,9 +640,16 @@ function pageNode(id) {
 }
 
 const pathStr = n => [...ancestors(n.id), n].map(label).join(' › ');
-function miniItem(n) {
+function miniItem(n, withPath = false) {
+  const where = withPath ? `<div class="sub" style="color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.parent ? 'อยู่ใน ' + esc(ancestors(n.id).map(label).join(' › ')) : 'ชั้นนอกสุด'}</div>` : '';
   return `<div class="lrow" data-go="${n.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(n)}" alt="" loading="lazy">
-    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${esc(label(n))}</div><div class="meta">${badgesHtml(n)}</div></div>${ic('right')}</div>`;
+    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${esc(label(n))}</div>${where}<div class="meta">${badgesHtml(n)}</div></div>${ic('right')}</div>`;
+}
+function smallRow(n) {
+  const sel = S.sel?.has(n.id);
+  const sub = n.type === 'box' && n.kind && !(n.name || '').startsWith(n.kind) ? `<div class="sub" style="color:var(--muted);font-size:.8rem">${esc(n.kind)}</div>` : '';
+  return `<div class="lrow ${sel ? 'sel' : ''}" data-go="${n.id}" data-card="1" role="button" tabindex="0">${S.sel ? `<span class="check">${ic('check')}</span>` : ''}<img class="lt" src="${thumbUrl(n)}" alt="" loading="lazy">
+    <div class="mid"><div class="nm ${n.name ? '' : 'none'}">${n.fav ? '<span class="star">★</span> ' : ''}${esc(n.name || 'ไม่มีชื่อ')}</div>${sub}<div class="meta">${badgesHtml(n)}</div></div>${S.sel ? '' : ic('right')}</div>`;
 }
 function pageList() {
   const boxes = [...S.nodes.values()].filter(n => n.type === 'box')
@@ -612,7 +683,7 @@ function pageListOf(id) {
       <div class="path" style="margin-top:2px">${esc(ancestors(id).map(label).join(' › ') || 'ชั้นนอกสุด')}</div><div class="meta"><span class="badge">${total} ชิ้นข้างใน</span></div></div>
       <button class="iconbtn" data-act="fav" data-id="${id}" aria-label="ติดดาว">${starIc(n.fav)}</button></div>
     <a class="btn block" href="#/n/${id}" style="margin-top:10px">${ic('image')} เปิดดูแบบรูป / เพิ่มของ</a>
-    ${groups.length ? groups.map(([b, its]) => `<div class="sec"><h2>${b ? `<img class="dot" src="${thumbUrl(b)}" alt="" style="display:inline-block;vertical-align:middle;margin-right:6px">${esc(rel(b))}` : 'วางอยู่ในนี้โดยตรง'} <small>${its.length}</small></h2></div><div class="list">${its.map(miniItem).join('')}</div>`).join('')
+    ${groups.length ? groups.map(([b, its]) => `<div class="sec"><h2>${b ? `<img class="dot" src="${thumbUrl(b)}" alt="" style="display:inline-block;vertical-align:middle;margin-right:6px">${esc(rel(b))}` : 'วางอยู่ในนี้โดยตรง'} <small>${its.length}</small></h2></div><div class="list">${its.map(x => miniItem(x)).join('')}</div>`).join('')
       : `<div class="empty"><div class="big">${ic('box')}</div><h3>ยังไม่มีของข้างใน</h3><p>แตะ “เปิดดูแบบรูป” แล้วกดเพิ่มของได้เลย</p></div>`}`;
 }
 
@@ -735,7 +806,7 @@ async function showUsage() {
 /* ───────────── backup ───────────── */
 async function exportAll() {
   const btn = $('#bExp'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> กำลังรวมไฟล์…'; }
-  const out = { app: 'stuff-finder', version: 1, exported: new Date().toISOString(), nodes: [] };
+  const out = { app: 'stuff-finder', version: 1, exported: new Date().toISOString(), tagList, nodes: [] };
   for (const n of S.nodes.values()) out.nodes.push({ ...n, thumb: await blobToData(n.thumb), photo: await blobToData(await DB.photo(n.id)) });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
@@ -757,6 +828,9 @@ async function importFile(file) {
       put.push(n); photos.push([n.id, await dataToBlob(photo)]);
     }
     await commit({ put, photos });
+    if (Array.isArray(data.tagList)) { data.tagList.forEach(t => { if (!tagList.includes(t)) tagList.push(t); }); }
+    put.forEach(n => (n.tags || []).forEach(t => { if (!tagList.includes(t)) tagList.push(t); }));
+    saveTags();
     render();
     toast(`นำเข้า ${put.length} รายการแล้ว`);
   } catch { toast('ไฟล์นี้ไม่ใช่ไฟล์สำรองของแอปนี้'); }
@@ -788,6 +862,7 @@ const A = {
     toast(n.fav ? 'เอาออกจากรายการโปรดแล้ว' : 'ติดดาวแล้ว จะขึ้นที่หน้าแรก');
     render({ keep: true });
   },
+  tagf: d => { S.tagFilter = S.tagFilter === d.tag ? null : d.tag; render({ keep: true }); },
   clearq: () => { S.focusQ = true; location.hash = '#/s'; },
   selstart: () => { S.sel = new Set(); render({ keep: true }); },
   selcancel: () => { S.sel = null; render({ keep: true }); },
@@ -871,6 +946,7 @@ window.addEventListener('hashchange', () => { S.sel = null; if (route().name ===
     await DB.open();
     (await DB.all()).forEach(n => S.nodes.set(n.id, n));
     reindex();
+    initTags();
   } catch {
     $('#app').innerHTML = `<div class="empty"><div class="big">${ic('alert')}</div><h3>เปิดที่เก็บข้อมูลไม่ได้</h3><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p></div>`;
     return;

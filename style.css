@@ -248,3 +248,15 @@ button.chip{border:0;cursor:pointer}
 .lrow .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
 .lrow>.i{color:var(--muted)}
 .nav a{font-size:.7rem}
+
+.tagrow{display:flex;gap:6px;overflow-x:auto;padding:12px 0 2px;scrollbar-width:none}
+.tagrow::-webkit-scrollbar{display:none}
+.tagrow .chip{flex:none;padding:5px 14px}
+.chip small{opacity:.7;margin-left:2px}
+.chip.danger{background:var(--bad-soft);color:var(--bad)}
+.chip .tx{margin-left:4px;opacity:.7}
+.linkbtn{color:var(--accent);font-weight:500;font-size:.85rem;margin-left:8px}
+.lrow.sel{outline:2px solid var(--accent)}
+.lrow .check{position:static;flex:none;border-color:var(--muted);background:var(--surface2)}
+.lrow.sel .check{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.field .chip,.sheet .chip{padding:6px 14px}
