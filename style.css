@@ -275,3 +275,7 @@ button.chip{border:0;cursor:pointer}
 .favrow .check{top:5px;left:5px;width:22px;height:22px}
 
 .tabs button small{opacity:.65;margin-left:2px}
+
+.tagbar{display:flex;gap:6px;overflow-x:auto;padding:10px 0 2px;scrollbar-width:none}
+.tagbar::-webkit-scrollbar{display:none}
+.tagbar .chip{flex:none;padding:5px 14px}

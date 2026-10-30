@@ -101,7 +101,7 @@ function initTags() {
 }
 
 /* ───────────── state & tree ───────────── */
-const S = { tagFilter: null, nodes: new Map(), kids: new Map(), urls: new Map(), sel: null, route: null, focusQ: false, toastFn: null };
+const S = { stags: new Set(), tagFilter: null, nodes: new Map(), kids: new Map(), urls: new Map(), sel: null, route: null, focusQ: false, toastFn: null };
 
 const label = n => n.name || (n.type === 'box' ? 'ไม่มีชื่อ' : 'ไม่มีชื่อ');
 const cmp = (a, b) => (a.type !== b.type ? (a.type === 'box' ? -1 : 1) : (a.name || '').localeCompare(b.name || '', 'th') || a.created - b.created);
@@ -585,7 +585,7 @@ function hl(text, terms) {
   return text.split(re).map((p, i) => (i % 2 ? `<mark>${esc(p)}</mark>` : esc(p))).join('');
 }
 
-const searchBox = (v = '') => `<div class="search">${ic('search')}<input id="q" type="text" enterkeyhint="search" placeholder="ค้นหาของ เช่น ไขควง, มันฝรั่ง…" value="${esc(v)}" autocomplete="off" autocapitalize="off">${v ? `<button class="clear" data-act="clearq" aria-label="ล้างคำค้น">${ic('x')}</button>` : ''}</div>`;
+const searchBox = (v = '') => `<div class="search">${ic('search')}<input id="q" type="text" enterkeyhint="search" placeholder="ค้นหาชื่อของ เช่น ไขควง, มันฝรั่ง…" value="${esc(v)}" autocomplete="off" autocapitalize="off">${v ? `<button class="clear" data-act="clearq" aria-label="ล้างคำค้น">${ic('x')}</button>` : ''}</div>`;
 
 function crumbsHtml(id) {
   const a = ancestors(id), cur = S.nodes.get(id);
@@ -669,10 +669,10 @@ function pageNode(id) {
 }
 
 const pathStr = n => [...ancestors(n.id), n].map(label).join(' › ');
-function miniItem(n, withPath = false) {
+function miniItem(n, withPath = false, terms = []) {
   const where = withPath ? `<div class="sub" style="color:var(--muted);font-size:.8rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${n.parent ? 'อยู่ใน ' + esc(ancestors(n.id).map(label).join(' › ')) : 'ชั้นนอกสุด'}</div>` : '';
   return `<div class="lrow" data-go="${n.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(n)}" alt="" loading="lazy">
-    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${esc(label(n))}</div>${where}<div class="meta">${badgesHtml(n)}</div></div>${ic('right')}</div>`;
+    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${hl(label(n), terms)}</div>${where}<div class="meta">${badgesHtml(n)}</div></div>${ic('right')}</div>`;
 }
 function smallRow(n) {
   const sel = S.sel?.has(n.id);
@@ -685,13 +685,14 @@ S.listTab = (() => { try { return localStorage.getItem(LISTTAB) === 'box' ? 'box
 S.listQ = '';
 function listResults() {
   const terms = S.listQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const hit = n => !terms.length || terms.every(t => [n.name, n.kind, ...(n.tags || []), ...ancestors(n.id).map(label)].join(' ').toLowerCase().includes(t));
-  const byFav = (a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
+  const hit = n => hasAllTags(n) && terms.every(t => (n.name || '').toLowerCase().includes(t));
+  const rank = n => terms.reduce((a, t) => a + ((n.name || '').toLowerCase().startsWith(t) ? 2 : 1), 0);
+  const byFav = (a, b) => rank(b) - rank(a) || (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
   if (S.listTab === 'item') {
     const items = [...S.nodes.values()].filter(n => n.type === 'item' && hit(n))
       .sort((a, b) => byFav(a, b) || (a.name || '').localeCompare(b.name || '', 'th'));
     if (!items.length) return `<div class="empty"><div class="big">${ic(terms.length ? 'search' : 'tag')}</div><h3>${terms.length ? 'ไม่พบของที่ค้นหา' : 'ยังไม่มีของ'}</h3><p>${terms.length ? 'ลองใช้คำสั้นลง' : 'ไปหน้าแรกกด “เพิ่ม” เพื่อถ่ายรูปของชิ้นแรก'}</p></div>`;
-    return `<div class="list">${items.map(x => miniItem(x, true)).join('')}</div>`;
+    return `<div class="list">${items.map(x => miniItem(x, true, terms)).join('')}</div>`;
   }
   const boxes = [...S.nodes.values()].filter(n => n.type === 'box' && hit(n))
     .sort((a, b) => byFav(a, b) || pathStr(a).localeCompare(pathStr(b), 'th'));
@@ -699,7 +700,7 @@ function listResults() {
   return `<p style="color:var(--muted);margin:0 2px 8px">แตะเพื่อดูของทั้งหมดข้างใน</p><div class="list">${boxes.map(b => {
     const c = itemsUnder(b.id).length, a = alertCount(b.id), anc = ancestors(b.id).map(label).join(' › ');
     return `<div class="lrow" data-gol="${b.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(b)}" alt="" loading="lazy">
-      <div class="mid"><div class="nm">${b.fav ? '<span class="star">★</span> ' : ''}${esc(label(b))}${b.kind && b.kind !== b.name && !(b.name || '').startsWith(b.kind) ? ` <small style="color:var(--muted);font-weight:400">${esc(b.kind)}</small>` : ''}</div>
+      <div class="mid"><div class="nm">${b.fav ? '<span class="star">★</span> ' : ''}${hl(label(b), terms)}${b.kind && b.kind !== b.name && !(b.name || '').startsWith(b.kind) ? ` <small style="color:var(--muted);font-weight:400">${esc(b.kind)}</small>` : ''}</div>
       <div class="sub" style="color:var(--muted);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${anc ? 'อยู่ใน ' + esc(anc) : 'ชั้นนอกสุด'}</div>
       <div class="meta"><span class="badge">${c} ชิ้น</span>${a ? `<span class="badge bad">${ic('alert')} ใกล้หมดอายุ ${a}</span>` : ''}</div></div>${ic('right')}</div>`;
   }).join('')}</div>`;
@@ -709,7 +710,7 @@ function pageList() {
   const ni = all.filter(n => n.type === 'item').length, nb = all.length - ni;
   return `<div class="top"><div class="brand"><div class="logo">${ic('list')}</div><h1>รายการ</h1></div>
     <div class="tabs" style="margin-bottom:10px"><button data-act="ltab" data-tab="item" class="${S.listTab === 'item' ? 'on' : ''}">ของ <small>${ni}</small></button><button data-act="ltab" data-tab="box" class="${S.listTab === 'box' ? 'on' : ''}">ที่เก็บ <small>${nb}</small></button></div>
-    <div class="search">${ic('search')}<input id="lq" type="text" enterkeyhint="search" placeholder="${S.listTab === 'item' ? 'ค้นหาในรายการของ…' : 'ค้นหาตู้ กล่อง ถุง…'}" value="${esc(S.listQ)}" autocomplete="off" autocapitalize="off"></div></div>
+    <div class="search">${ic('search')}<input id="lq" type="text" enterkeyhint="search" placeholder="${S.listTab === 'item' ? 'ค้นหาชื่อของ…' : 'ค้นหาชื่อตู้ กล่อง ถุง…'}" value="${esc(S.listQ)}" autocomplete="off" autocapitalize="off"></div></div>
     <div id="lres">${listResults()}</div>`;
 }
 function pageListOf(id) {
@@ -734,34 +735,29 @@ function pageListOf(id) {
       : `<div class="empty"><div class="big">${ic('box')}</div><h3>ยังไม่มีของข้างใน</h3><p>แตะ “เปิดดูแบบรูป” แล้วกดเพิ่มของได้เลย</p></div>`}`;
 }
 
+// Typed text matches item names only; tags are picked with the tag chips under the search box.
+const hasAllTags = n => [...S.stags].every(t => (n.tags || []).includes(t));
 function runSearch(q) {
   const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length) return { terms, res: [] };
+  if (!terms.length && !S.stags.size) return { terms, res: [] };
   const res = [];
   for (const n of S.nodes.values()) {
-    const own = [n.name, n.note, ...(n.tags || [])].join(' ').toLowerCase();
-    const path = ancestors(n.id).map(label).join(' ').toLowerCase();
-    let score = 0, ownHit = false, ok = true;
-    for (const t of terms) {
-      const nm = (n.name || '').toLowerCase();
-      if (nm.includes(t)) { score += nm.startsWith(t) ? 6 : 4; ownHit = true; }
-      else if (own.includes(t)) { score += 2; ownHit = true; }
-      else if (path.includes(t)) score += 1;
-      else { ok = false; break; }
-    }
-    if (ok && ownHit) res.push({ n, score: score + (n.type === 'item' ? 0.5 : 0) });
+    if (!hasAllTags(n)) continue;
+    const nm = (n.name || '').toLowerCase();
+    if (!terms.every(t => nm.includes(t))) continue;
+    res.push({ n, score: terms.reduce((a, t) => a + (nm.startsWith(t) ? 2 : 1), 0) });
   }
-  res.sort((a, b) => b.score - a.score || a.n.name.localeCompare(b.n.name, 'th'));
+  res.sort((a, b) => b.score - a.score || (b.n.fav ? 1 : 0) - (a.n.fav ? 1 : 0) || (a.n.name || '').localeCompare(b.n.name || '', 'th'));
   return { terms, res: res.map(r => r.n) };
 }
 function searchResultsHtml(q) {
   const { terms, res } = runSearch(q);
-  if (!terms.length) {
+  if (!terms.length && !S.stags.size) {
     const recent = [...S.nodes.values()].sort((a, b) => b.updated - a.updated).slice(0, 8);
     return recent.length ? `<div class="sec"><h2>เพิ่ม/แก้ไขล่าสุด</h2></div><div class="list">${recent.map(n => rowHtml(n)).join('')}</div>`
       : `<div class="empty"><div class="big">${ic('search')}</div><h3>ยังไม่มีอะไรให้ค้นหา</h3><p>เพิ่มของชิ้นแรกที่หน้าแรกก่อนนะ</p></div>`;
   }
-  if (!res.length) return `<div class="empty"><div class="big">${ic('search')}</div><h3>ไม่พบ “${esc(q)}”</h3><p>ลองใช้คำสั้นลง หรือชื่ออื่นที่ตั้งไว้ เช่น แท็กหรือบันทึก</p></div>`;
+  if (!res.length) return `<div class="empty"><div class="big">${ic('search')}</div><h3>ไม่พบ${q.trim() ? ` “${esc(q)}”` : 'รายการที่ตรงกับแท็ก'}</h3><p>ค้นหาด้วยชื่อ ลองใช้คำสั้นลง หรือเอาแท็กที่เลือกออก</p></div>`;
   return `<div class="sec"><h2>พบ ${res.length} รายการ</h2></div><div class="list">${res.map(n => rowHtml(n, terms)).join('')}</div>`;
 }
 function pageSearch(q) {
@@ -835,6 +831,7 @@ function render({ keep = false } = {}) {
   });
   if (r.name === 'search' && S.focusQ) { const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   S.focusQ = false;
+  paintTagBar(searchFocused() ? true : undefined);
   if (r.name === 'set') showUsage();
 }
 
@@ -914,6 +911,14 @@ const A = {
     try { localStorage.setItem(LISTTAB, S.listTab); } catch { /* storage blocked */ }
     render();
   },
+  stag: d => {
+    S.stags.has(d.tag) ? S.stags.delete(d.tag) : S.stags.add(d.tag);
+    const r = S.route.name;
+    if (r === 'search') $('#results').innerHTML = searchResultsHtml($('#q').value);
+    else if (r === 'list') $('#lres').innerHTML = listResults();
+    else { S.focusQ = true; S.keepTags = true; location.hash = '#/s/' + encodeURIComponent($('#q')?.value || ''); return; }
+    paintTagBar(searchFocused() ? true : undefined);
+  },
   tagf: d => { S.tagFilter = S.tagFilter === d.tag ? null : d.tag; render({ keep: true }); },
   clearq: () => { S.focusQ = true; location.hash = '#/s'; },
   selstart: () => { S.sel = new Set(); render({ keep: true }); },
@@ -989,7 +994,27 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'q') e.target.blur(); });
 
-window.addEventListener('hashchange', () => { S.sel = null; if (route().name !== 'list') S.listQ = ''; if (route().name === 'search' && !S.route?.q && route().q === '') S.focusQ = true; render(); });
+window.addEventListener('hashchange', () => { S.sel = null; if (!S.keepTags && route().name !== S.route?.name) S.stags.clear(); S.keepTags = false; if (route().name !== 'list') S.listQ = ''; if (route().name === 'search' && !S.route?.q && route().q === '') S.focusQ = true; render(); });
+
+/* tag chips shown under the search box while it is focused (or while tags are selected) */
+const searchFocused = () => ['q', 'lq'].includes(document.activeElement?.id);
+function paintTagBar(show) {
+  const host = $('.top'); if (!host) return;
+  let bar = $('#tagbar');
+  const want = show ?? (S.stags.size > 0 && ['search', 'list'].includes(S.route?.name));
+  const count = new Map();
+  S.nodes.forEach(n => (n.tags || []).forEach(t => count.set(t, (count.get(t) || 0) + 1)));
+  const order = [...tagList, ...[...count.keys()].filter(t => !tagList.includes(t))].filter(t => count.has(t));
+  if (!want || !order.length) { bar?.remove(); return; }
+  if (!bar) {
+    bar = document.createElement('div'); bar.id = 'tagbar'; bar.className = 'tagbar';
+    bar.addEventListener('pointerdown', e => e.preventDefault()); // keep the keyboard open while tapping a tag
+    host.append(bar);
+  }
+  bar.innerHTML = order.map(t => `<button type="button" class="chip ${S.stags.has(t) ? 'on' : ''}" data-act="stag" data-tag="${esc(t)}">${esc(t)} <small>${count.get(t)}</small></button>`).join('');
+}
+document.addEventListener('focusin', e => { if (['q', 'lq'].includes(e.target.id)) paintTagBar(true); });
+document.addEventListener('focusout', () => setTimeout(() => paintTagBar(searchFocused() ? true : undefined), 150));
 
 /* a thumbnail that fails to decode is rebuilt from the full photo, once per item */
 const healed = new Set();
