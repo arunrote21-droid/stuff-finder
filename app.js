@@ -1,0 +1,787 @@
+(() => {
+'use strict';
+
+/* ───────────── helpers ───────────── */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
+const num = v => { const n = parseFloat(v); return Number.isFinite(n) ? n : 0; };
+const fmtNum = n => (Math.round(n * 100) / 100).toLocaleString('th-TH');
+
+const ICONS = {
+  home: '<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  minus: '<path d="M5 12h14"/>',
+  camera: '<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  image: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
+  box: '<path d="M21 8l-9-5-9 5v8l9 5 9-5z"/><path d="M3 8l9 5 9-5M12 13v8"/>',
+  tag: '<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8z"/><circle cx="7" cy="7" r="1.5"/>',
+  right: '<path d="M9 18l6-6-6-6"/>',
+  down: '<path d="M6 9l6 6 6-6"/>',
+  left: '<path d="M15 18l-6-6 6-6"/>',
+  edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
+  trash: '<path d="M3 6h18"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  move: '<path d="M5 12h14M13 6l6 6-6 6"/>',
+  check: '<path d="M20 6L9 17l-5-5"/>',
+  x: '<path d="M18 6L6 18M6 6l12 12"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5M12 3v12"/>',
+  alert: '<path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/>',
+  select: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  layers: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>',
+  cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+};
+const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
+
+/* ───────────── storage (IndexedDB) ───────────── */
+const DB = {
+  db: null,
+  open() {
+    return new Promise((res, rej) => {
+      const r = indexedDB.open('stuff-finder', 1);
+      r.onupgradeneeded = () => { r.result.createObjectStore('nodes', { keyPath: 'id' }); r.result.createObjectStore('photos'); };
+      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onerror = () => rej(r.error);
+    });
+  },
+  run(stores, mode, fn) {
+    return new Promise((res, rej) => {
+      const t = this.db.transaction(stores, mode);
+      const out = fn(...stores.map(s => t.objectStore(s)));
+      t.oncomplete = () => res(out instanceof IDBRequest ? out.result : out);
+      t.onerror = t.onabort = () => rej(t.error);
+    });
+  },
+  all: () => DB.run(['nodes'], 'readonly', s => s.getAll()),
+  photo: id => DB.run(['photos'], 'readonly', s => s.get(id)),
+  // one atomic write: nodes to put, ids to delete, [id, blob] photos to put
+  write({ put = [], del = [], photos = [] }) {
+    return DB.run(['nodes', 'photos'], 'readwrite', (ns, ps) => {
+      put.forEach(n => ns.put(n));
+      photos.forEach(([id, b]) => b && ps.put(b, id));
+      del.forEach(id => { ns.delete(id); ps.delete(id); });
+    });
+  },
+  clear: () => DB.run(['nodes', 'photos'], 'readwrite', (ns, ps) => { ns.clear(); ps.clear(); }),
+};
+
+/* ───────────── state & tree ───────────── */
+const S = { nodes: new Map(), kids: new Map(), urls: new Map(), sel: null, route: null, focusQ: false, toastFn: null };
+
+const label = n => n.name || (n.type === 'box' ? 'ไม่มีชื่อ' : 'ไม่มีชื่อ');
+const cmp = (a, b) => (a.type !== b.type ? (a.type === 'box' ? -1 : 1) : (a.name || '').localeCompare(b.name || '', 'th') || a.created - b.created);
+
+function reindex() {
+  S.kids = new Map();
+  for (const n of S.nodes.values()) {
+    const k = n.parent || '';
+    if (!S.kids.has(k)) S.kids.set(k, []);
+    S.kids.get(k).push(n);
+  }
+  for (const a of S.kids.values()) a.sort(cmp);
+}
+const children = id => S.kids.get(id || '') || [];
+function ancestors(id) {
+  const out = [];
+  let n = S.nodes.get(id);
+  while (n && n.parent && S.nodes.has(n.parent) && out.length < 64) { n = S.nodes.get(n.parent); out.unshift(n); }
+  return out;
+}
+function descendants(id) {
+  const out = [], stack = [...children(id)];
+  while (stack.length) { const n = stack.pop(); out.push(n); stack.push(...children(n.id)); }
+  return out;
+}
+const itemsUnder = id => descendants(id).filter(n => n.type === 'item');
+
+function thumbUrl(n) {
+  const c = S.urls.get(n.id);
+  if (c && c.v === n.updated) return c.url;
+  if (c) URL.revokeObjectURL(c.url);
+  const url = URL.createObjectURL(n.thumb);
+  S.urls.set(n.id, { v: n.updated, url });
+  return url;
+}
+
+/* ───────────── expiry ───────────── */
+function daysLeft(iso) {
+  if (!iso) return null;
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date();
+  return Math.round((new Date(y, m - 1, d) - new Date(t.getFullYear(), t.getMonth(), t.getDate())) / 864e5);
+}
+const fmtDate = iso => { const [y, m, d] = iso.split('-').map(Number); return new Date(y, m - 1, d).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' }); };
+function expInfo(n) {
+  const d = daysLeft(n.expiry);
+  if (d == null) return null;
+  if (d < 0) return { d, cls: 'bad', txt: `หมดอายุแล้ว ${-d} วัน` };
+  if (d === 0) return { d, cls: 'bad', txt: 'หมดอายุวันนี้' };
+  if (d <= 7) return { d, cls: 'warn', txt: `อีก ${d} วัน` };
+  if (d <= 30) return { d, cls: '', txt: `อีก ${d} วัน` };
+  return { d, cls: 'ok', txt: d < 365 ? `อีก ${d} วัน` : `อีก ${Math.floor(d / 30)} เดือน` };
+}
+const isAlert = n => n.type === 'item' && n.qty > 0 && n.expiry && daysLeft(n.expiry) <= 7;
+const alertItems = () => [...S.nodes.values()].filter(isAlert);
+const alertCount = id => itemsUnder(id).filter(isAlert).length;
+
+/* ───────────── image processing ───────────── */
+async function processImage(file) {
+  let src;
+  try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
+  catch {
+    src = await new Promise((ok, no) => { const i = new Image(); i.onload = () => ok(i); i.onerror = no; i.src = URL.createObjectURL(file); });
+  }
+  const w = src.width || src.naturalWidth, h = src.height || src.naturalHeight;
+  const mk = (max, q) => {
+    const k = Math.min(1, max / Math.max(w, h));
+    const c = document.createElement('canvas');
+    c.width = Math.round(w * k); c.height = Math.round(h * k);
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
+    g.imageSmoothingQuality = 'high';
+    g.drawImage(src, 0, 0, c.width, c.height);
+    return new Promise(r => c.toBlob(r, 'image/jpeg', q));
+  };
+  const [full, thumb] = await Promise.all([mk(1400, 0.85), mk(420, 0.78)]);
+  src.close?.();
+  return { full, thumb };
+}
+function choosePhoto(cam) {
+  const inp = $(cam ? '#fileCamera' : '#fileGallery');
+  inp.value = '';
+  return new Promise(res => { inp.onchange = () => res(inp.files[0] || null); inp.click(); });
+}
+const blobToData = b => new Promise(r => { if (!b) return r(null); const f = new FileReader(); f.onload = () => r(f.result); f.readAsDataURL(b); });
+const dataToBlob = d => (d ? fetch(d).then(r => r.blob()) : null);
+
+/* ───────────── UI primitives: sheet, ask, toast, picker ───────────── */
+function sheet(inner, cls = '') {
+  const sc = document.createElement('div');
+  sc.className = 'scrim';
+  sc.innerHTML = `<div class="sheet ${cls}" role="dialog" aria-modal="true"><div class="grab"></div>${inner}</div>`;
+  const layer = $('#layer');
+  const close = () => { sc.remove(); if (!layer.children.length) document.body.style.overflow = ''; sc.onclose?.(); };
+  sc._close = close;
+  sc.addEventListener('pointerdown', e => { if (e.target === sc) close(); });
+  layer.append(sc);
+  document.body.style.overflow = 'hidden';
+  return { el: sc.firstChild, scrim: sc, close };
+}
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  const lb = $('.lightbox'); if (lb) return lb.click();
+  $('#layer').lastElementChild?._close?.();
+});
+
+function ask({ title, text, buttons }) {
+  return new Promise(res => {
+    const s = sheet(`<h3>${esc(title)}</h3>${text ? `<p style="color:var(--muted);margin:0 0 14px">${esc(text)}</p>` : ''}
+      ${buttons.map((b, i) => `<button class="btn block ${b.cls || ''}" data-i="${i}" style="margin-bottom:8px">${esc(b.label)}</button>`).join('')}`);
+    let done = false;
+    const fin = v => { if (done) return; done = true; s.close(); res(v); };
+    s.el.addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) fin(buttons[b.dataset.i].value); });
+    s.scrim.onclose = () => fin(null);
+  });
+}
+
+let toastTimer;
+function toast(msg, action) {
+  const t = $('#toast');
+  S.toastFn = action?.fn || null;
+  t.innerHTML = `<span>${esc(msg)}</span>${action ? `<button data-act="toastact">${esc(action.label)}</button>` : ''}`;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), action ? 7000 : 2600);
+}
+
+function locText(id) {
+  if (!id || !S.nodes.has(id)) return 'ชั้นนอกสุด (ยังไม่ได้อยู่ในที่ไหน)';
+  return [...ancestors(id), S.nodes.get(id)].map(label).join(' › ');
+}
+
+// resolves { id } (id may be null = top level) or undefined if cancelled
+function pickLocation({ title = 'เลือกที่เก็บ', exclude = new Set(), current = null, confirm = 'เลือกที่นี่' } = {}) {
+  return new Promise(res => {
+    let pick = current && S.nodes.has(current) ? current : null;
+    const open = new Set(pick ? [...ancestors(pick).map(a => a.id), pick] : []);
+    const s = sheet(`<h3>${esc(title)}</h3><div class="tree" id="tree"></div>
+      <div class="actions"><button class="btn primary" data-ok>${esc(confirm)}</button><button class="btn" data-cancel>ยกเลิก</button></div>`);
+    const tree = $('#tree', s.el);
+    const boxKids = id => children(id).filter(n => n.type === 'box' && !exclude.has(n.id));
+    const rows = (pid, depth) => boxKids(pid).map(n => {
+      const has = boxKids(n.id).length > 0, isOpen = open.has(n.id);
+      return `<div class="tn ${pick === n.id ? 'pick' : ''}" data-id="${n.id}" style="padding-left:${8 + depth * 20}px">
+        <span class="tg" data-tg="${n.id}">${has ? ic(isOpen ? 'down' : 'right') : ''}</span>
+        <img class="im" src="${thumbUrl(n)}" alt=""><span class="t">${esc(label(n))}</span></div>${isOpen ? rows(n.id, depth + 1).join('') : ''}`;
+    });
+    const paint = () => {
+      const top = tree.scrollTop;
+      tree.innerHTML = `<div class="tn root ${pick === null ? 'pick' : ''}" data-id=""><span class="tg"></span><span class="im" style="display:grid;place-items:center">${ic('home')}</span><span class="t">ชั้นนอกสุด</span></div>${rows(null, 0).join('')}`;
+      tree.scrollTop = top;
+    };
+    paint();
+    tree.addEventListener('click', e => {
+      const tg = e.target.closest('[data-tg]');
+      if (tg) { open.has(tg.dataset.tg) ? open.delete(tg.dataset.tg) : open.add(tg.dataset.tg); return paint(); }
+      const r = e.target.closest('.tn'); if (!r) return;
+      pick = r.dataset.id || null; paint();
+    });
+    let done = false;
+    const fin = v => { if (done) return; done = true; s.close(); res(v); };
+    s.el.addEventListener('click', e => {
+      if (e.target.closest('[data-ok]')) fin({ id: pick });
+      else if (e.target.closest('[data-cancel]')) fin(undefined);
+    });
+    s.scrim.onclose = () => fin(undefined);
+  });
+}
+
+async function zoom(id) {
+  const n = S.nodes.get(id); if (!n) return;
+  const blob = (await DB.photo(id)) || n.thumb;
+  const url = URL.createObjectURL(blob);
+  const d = document.createElement('div');
+  d.className = 'lightbox';
+  d.innerHTML = `<img src="${url}" alt="${esc(label(n))}"><button aria-label="ปิด">${ic('x')}</button>`;
+  d.onclick = () => { d.remove(); URL.revokeObjectURL(url); };
+  document.body.append(d);
+}
+
+/* ───────────── data operations ───────────── */
+async function commit({ put = [], del = [], photos = [] }, undoLabel) {
+  const prev = put.map(n => S.nodes.get(n.id)).filter(Boolean);
+  const gone = del.map(id => S.nodes.get(id)).filter(Boolean);
+  const gonePhotos = undoLabel ? await Promise.all(gone.map(n => DB.photo(n.id).then(b => [n.id, b]))) : [];
+  await DB.write({ put, del, photos });
+  del.forEach(id => { const c = S.urls.get(id); if (c) URL.revokeObjectURL(c.url); S.urls.delete(id); S.nodes.delete(id); });
+  put.forEach(n => S.nodes.set(n.id, n));
+  reindex();
+  if (undoLabel) {
+    toast(undoLabel, { label: 'เลิกทำ', fn: async () => {
+      await DB.write({ put: [...prev, ...gone], photos: gonePhotos });
+      [...prev, ...gone].forEach(n => S.nodes.set(n.id, n));
+      reindex(); render({ keep: true }); toast('กู้คืนแล้ว');
+    } });
+  }
+  navigator.storage?.persist?.();
+}
+const moveNodes = (ids, parent) => commit({ put: ids.map(id => ({ ...S.nodes.get(id), parent, updated: Date.now() })) });
+
+async function deleteNode(id) {
+  const n = S.nodes.get(id); if (!n) return false;
+  const sub = descendants(id);
+  const items = sub.filter(x => x.type === 'item').length;
+  let mode = 'all';
+  if (n.type === 'box' && sub.length) {
+    mode = await ask({
+      title: `ลบ “${label(n)}”`,
+      text: `ข้างในมีของ ${items} ชิ้น${sub.length - items ? ` และกล่องย่อย ${sub.length - items} กล่อง` : ''} จะให้ทำอย่างไร`,
+      buttons: [
+        { label: 'ลบแค่กล่อง — ย้ายของข้างในออกมาไว้ชั้นนอก', value: 'unwrap' },
+        { label: 'ลบทั้งหมด รวมของข้างใน', value: 'all', cls: 'danger' },
+        { label: 'ยกเลิก', value: null },
+      ],
+    });
+    if (!mode) return false;
+  } else {
+    const ok = await ask({ title: `ลบ “${label(n)}”?`, buttons: [{ label: 'ลบ', value: true, cls: 'danger' }, { label: 'ยกเลิก', value: null }] });
+    if (!ok) return false;
+  }
+  if (mode === 'unwrap') {
+    const now = Date.now();
+    await commit({ put: children(id).map(k => ({ ...k, parent: n.parent || null, updated: now })), del: [id] }, `ลบ “${label(n)}” แล้ว`);
+  } else {
+    await commit({ del: [id, ...sub.map(x => x.id)] }, `ลบ “${label(n)}” แล้ว`);
+  }
+  return true;
+}
+
+/* ───────────── add / edit form ───────────── */
+function openForm(opts = {}) {
+  const ex = opts.id ? S.nodes.get(opts.id) : null;
+  const d = {
+    type: ex ? ex.type : (opts.type || 'item'),
+    parent: ex ? ex.parent : (opts.parent || null),
+    photo: ex ? { url: thumbUrl(ex), isNew: false } : null,
+  };
+  const lock = !!ex || opts.lockType;
+  const exclude = ex ? new Set([ex.id, ...descendants(ex.id).map(x => x.id)]) : new Set();
+  const units = ['ชิ้น', 'อัน', 'หัว', 'ถุง', 'กล่อง', 'ขวด', 'แพ็ค', 'กก.', 'กรัม', 'ลิตร', 'ฟอง'];
+  const s = sheet(`<form id="f" novalidate>
+    <h3>${ex ? 'แก้ไข' : 'เพิ่มใหม่'}</h3>
+    ${lock ? '' : `<div class="tabs"><button type="button" data-t="item">${ic('tag')} ของ</button><button type="button" data-t="box">${ic('box')} กล่อง / ที่เก็บ</button></div>`}
+    <div class="field"><div class="drop" id="drop"></div><div class="hint" id="photoHint">ต้องมีรูปถ่ายเสมอ — รูปนี้คือสิ่งที่จะเห็นตอนค้นหา</div></div>
+    <div class="field"><label for="fn" id="nl"></label><input id="fn" maxlength="120" autocomplete="off" value="${esc(ex?.name || '')}"></div>
+    <div id="itemOnly">
+      <div class="two">
+        <div class="field"><label for="fq">จำนวน</label><input id="fq" type="number" inputmode="decimal" min="0" step="any" value="${ex ? ex.qty : 1}"></div>
+        <div class="field"><label for="fu">หน่วย</label><input id="fu" list="units" maxlength="12" value="${esc(ex?.unit ?? 'ชิ้น')}"><datalist id="units">${units.map(u => `<option value="${u}">`).join('')}</datalist></div>
+      </div>
+      <div class="field"><label for="fe">วันหมดอายุ <span style="color:var(--muted);font-weight:400">(ถ้ามี)</span></label>
+        <input id="fe" type="date" value="${esc(ex?.expiry || '')}">
+        <div class="actions" style="margin-top:8px;gap:6px">${[['+3 วัน', 3], ['+1 สัปดาห์', 7], ['+1 เดือน', 30], ['+6 เดือน', 182], ['+1 ปี', 365]].map(([t, v]) => `<button type="button" class="chip" data-add="${v}">${t}</button>`).join('')}<button type="button" class="chip" data-add="0" style="background:var(--surface2);color:var(--muted)">ล้าง</button></div>
+      </div>
+    </div>
+    <div class="field"><label for="ft">แท็ก <span style="color:var(--muted);font-weight:400">(คั่นด้วยเครื่องหมายจุลภาค)</span></label><input id="ft" placeholder="เช่น เครื่องมือ, ซ่อมบ้าน" value="${esc((ex?.tags || []).join(', '))}"></div>
+    <div class="field"><label for="fo">บันทึกเพิ่มเติม</label><textarea id="fo" placeholder="ยี่ห้อ ขนาด รายละเอียดที่อยากจำ">${esc(ex?.note || '')}</textarea></div>
+    <div class="field"><label>เก็บไว้ที่</label>
+      <button type="button" class="btn block" id="loc" style="height:auto;min-height:46px;padding:8px 16px;justify-content:space-between;text-align:left"><span id="locT"></span>${ic('right')}</button></div>
+    <div class="actions" style="margin-top:6px">
+      <button class="btn primary" style="flex:1" id="save">${ic('check')} บันทึก</button>
+      ${ex ? '' : `<button type="button" class="btn" id="again">บันทึกและเพิ่มต่อ</button>`}
+      <button type="button" class="btn" data-cancel>ยกเลิก</button>
+    </div></form>`);
+  const $f = sel => $(sel, s.el);
+  const paintDrop = () => {
+    const dr = $f('#drop');
+    dr.classList.toggle('has', !!d.photo);
+    dr.innerHTML = d.photo
+      ? `<img class="pv" src="${d.photo.url}" alt=""><div class="row2"><button type="button" class="btn" data-p="cam">${ic('camera')} ถ่ายใหม่</button><button type="button" class="btn" data-p="gal">${ic('image')} เลือกรูปอื่น</button></div>`
+      : `<div style="color:var(--accent)">${ic(d.type === 'box' ? 'box' : 'camera').replace('class="i ', 'class="i " style="width:48px;height:48px" data-x="')}</div>
+         <p>${d.type === 'box' ? 'ถ่ายรูปกล่อง ถุง ตู้ หรือชั้นที่ใช้เก็บของ' : 'ถ่ายรูปของชิ้นนี้ให้เห็นชัดๆ'}</p>
+         <div class="row2"><button type="button" class="btn primary" data-p="cam">${ic('camera')} ถ่ายรูป</button><button type="button" class="btn" data-p="gal">${ic('image')} เลือกจากคลังรูป</button></div>`;
+  };
+  const paintType = () => {
+    $$('.tabs button', s.el).forEach(b => b.classList.toggle('on', b.dataset.t === d.type));
+    $f('#itemOnly').classList.toggle('hidden', d.type !== 'item');
+    $f('#nl').innerHTML = d.type === 'item' ? 'ชื่อของ <em>*</em>' : 'ชื่อ <span style="color:var(--muted);font-weight:400">(ไม่ใส่ก็ได้ ถ้ามีรูปแล้ว)</span>';
+    $f('#fn').placeholder = d.type === 'item' ? 'เช่น ไขควงปากแฉก, มันฝรั่ง' : 'เช่น กล่องเครื่องมือ, ตู้เย็น ชั้น 2';
+    if (!d.photo) paintDrop();
+  };
+  const paintLoc = () => { $f('#locT').textContent = locText(d.parent); };
+  paintDrop(); paintType(); paintLoc();
+
+  s.el.addEventListener('click', async e => {
+    const t = e.target.closest('[data-t]');
+    if (t) { d.type = t.dataset.t; paintType(); return; }
+    const p = e.target.closest('[data-p]');
+    if (p) {
+      const f = await choosePhoto(p.dataset.p === 'cam');
+      if (!f) return;
+      const dr = $f('#drop'); dr.insertAdjacentHTML('beforeend', `<div class="spin" style="position:absolute;top:14px;right:14px;color:var(--accent)"></div>`);
+      try {
+        const r = await processImage(f);
+        if (d.photo?.isNew) URL.revokeObjectURL(d.photo.url);
+        d.photo = { ...r, url: URL.createObjectURL(r.thumb), isNew: true };
+        dr.classList.remove('err');
+      } catch { toast('อ่านรูปนี้ไม่ได้ ลองรูปอื่นนะ'); }
+      paintDrop();
+      return;
+    }
+    const a = e.target.closest('[data-add]');
+    if (a) {
+      const v = +a.dataset.add;
+      if (!v) { $f('#fe').value = ''; return; }
+      const dt = new Date(); dt.setDate(dt.getDate() + v);
+      $f('#fe').value = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      return;
+    }
+    if (e.target.closest('#loc')) {
+      const r = await pickLocation({ title: 'เก็บไว้ที่ไหน', exclude, current: d.parent, confirm: 'เลือกที่นี่' });
+      if (r) { d.parent = r.id; paintLoc(); }
+      return;
+    }
+    if (e.target.closest('[data-cancel]')) s.close();
+  });
+
+  const save = async again => {
+    const name = $f('#fn').value.trim();
+    if (!d.photo) { $f('#drop').classList.add('err'); $f('#drop').scrollIntoView({ block: 'center', behavior: 'smooth' }); toast('ต้องมีรูปถ่ายก่อนนะ'); return; }
+    if (d.type === 'item' && !name) { $f('#fn').focus(); toast('ใส่ชื่อของด้วยนะ'); return; }
+    const now = Date.now();
+    const n = ex ? { ...ex } : { id: uid(), created: now };
+    Object.assign(n, {
+      type: d.type, parent: d.parent || null, name, updated: now,
+      note: $f('#fo').value.trim(),
+      tags: [...new Set($f('#ft').value.split(/[,，\n]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean))],
+      qty: d.type === 'item' ? Math.max(0, num($f('#fq').value)) : 0,
+      unit: d.type === 'item' ? $f('#fu').value.trim() : '',
+      expiry: d.type === 'item' ? ($f('#fe').value || '') : '',
+    });
+    if (d.photo.isNew) n.thumb = d.photo.thumb;
+    $f('#save').disabled = true;
+    await commit({ put: [n], photos: d.photo.isNew ? [[n.id, d.photo.full]] : [] });
+    s.close();
+    opts.onSaved?.(n);
+    if (again) { openForm({ type: n.type, parent: n.parent, lockType: opts.lockType }); toast(`เพิ่ม “${label(n)}” แล้ว`); }
+    else toast(ex ? 'บันทึกแล้ว' : `เพิ่ม “${label(n)}” แล้ว`);
+    render({ keep: true });
+  };
+  $f('#f').addEventListener('submit', e => { e.preventDefault(); save(false); });
+  $f('#again')?.addEventListener('click', () => save(true));
+}
+
+/* ───────────── views ───────────── */
+function route() {
+  let h = location.hash.slice(1) || '/';
+  try { h = decodeURIComponent(h); } catch { /* keep raw */ }
+  if (h.startsWith('/n/')) return { name: 'node', id: h.slice(3) };
+  if (h === '/s' || h.startsWith('/s/')) return { name: 'search', q: h.slice(3) };
+  if (h === '/exp') return { name: 'exp' };
+  if (h === '/set') return { name: 'set' };
+  return { name: 'home' };
+}
+
+function badgesHtml(n) {
+  let h = '';
+  if (n.type === 'item') {
+    h += n.qty > 0 ? `<span class="badge">${ic('layers')} ${fmtNum(n.qty)} ${esc(n.unit)}</span>` : `<span class="badge bad">หมดแล้ว</span>`;
+    const e = expInfo(n);
+    if (e && n.qty > 0) h += `<span class="badge ${e.cls}">${ic('cal')} ${e.txt}</span>`;
+  } else {
+    const c = itemsUnder(n.id).length, a = alertCount(n.id);
+    h += `<span class="badge">${ic('box')} ข้างใน ${c} ชิ้น</span>`;
+    if (a) h += `<span class="badge bad">${ic('alert')} ใกล้หมดอายุ ${a}</span>`;
+  }
+  return h;
+}
+
+function cardHtml(n) {
+  const sel = S.sel?.has(n.id);
+  let tags = '', sub = '';
+  if (n.type === 'box') {
+    const k = children(n.id);
+    tags += `<span class="tag tl box">${ic('box')} ${itemsUnder(n.id).length} ชิ้น</span>`;
+    const a = alertCount(n.id);
+    if (a) tags += `<span class="tag tr bad">${ic('alert')} ${a}</span>`;
+    sub = k.length ? k.slice(0, 3).map(label).join(', ') + (k.length > 3 ? ` +${k.length - 3}` : '') : 'ยังว่างอยู่';
+  } else {
+    const e = expInfo(n);
+    if (n.qty <= 0) tags += `<span class="tag tl bad">หมดแล้ว</span>`;
+    else if (n.qty !== 1 || (n.unit && n.unit !== 'ชิ้น')) tags += `<span class="tag bl">× ${fmtNum(n.qty)} ${esc(n.unit)}</span>`;
+    if (e && n.qty > 0 && (e.cls === 'bad' || e.cls === 'warn')) tags += `<span class="tag tr ${e.cls}">${e.txt}</span>`;
+    sub = n.expiry ? `หมดอายุ ${fmtDate(n.expiry)}` : (n.note.split('\n')[0] || '');
+  }
+  return `<div class="card ${sel ? 'sel' : ''}" data-go="${n.id}" data-card="1" role="button" tabindex="0">
+    <div class="ph"><img src="${thumbUrl(n)}" alt="" loading="lazy">${tags}${S.sel ? `<span class="check">${ic('check')}</span>` : ''}</div>
+    <div class="body"><div class="nm ${n.name ? '' : 'none'}">${esc(n.name || 'ไม่มีชื่อ')}</div><div class="sub">${esc(sub)}</div></div></div>`;
+}
+
+function pathHtml(n) {
+  const a = ancestors(n.id);
+  if (!a.length) return `<div class="path"><span>${ic('home')} อยู่ชั้นนอกสุด</span></div>`;
+  return `<div class="path">${a.map(x => `<span class="p" data-go="${x.id}"><img class="dot" src="${thumbUrl(x)}" alt="">${esc(label(x))}</span>`).join(ic('right'))}</div>`;
+}
+function rowHtml(n, terms = []) {
+  return `<div class="row" data-go="${n.id}" role="button" tabindex="0"><img class="thumb" src="${thumbUrl(n)}" alt="" loading="lazy">
+    <div class="mid"><div class="nm">${hl(label(n), terms)}</div><div class="meta">${badgesHtml(n)}</div>${pathHtml(n)}</div></div>`;
+}
+function hl(text, terms) {
+  if (!terms.length) return esc(text);
+  const re = new RegExp('(' + terms.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|') + ')', 'gi');
+  return text.split(re).map((p, i) => (i % 2 ? `<mark>${esc(p)}</mark>` : esc(p))).join('');
+}
+
+const searchBox = (v = '') => `<div class="search">${ic('search')}<input id="q" type="text" enterkeyhint="search" placeholder="ค้นหาของ เช่น ไขควง, มันฝรั่ง…" value="${esc(v)}" autocomplete="off" autocapitalize="off">${v ? `<button class="clear" data-act="clearq" aria-label="ล้างคำค้น">${ic('x')}</button>` : ''}</div>`;
+
+function crumbsHtml(id) {
+  const a = ancestors(id), cur = S.nodes.get(id);
+  return `<div class="crumbs"><a class="crumb home" href="#/">${ic('home')}<span>ทั้งหมด</span></a>${a.map(x => `${ic('right', 'sep')}<span class="crumb" data-go="${x.id}"><img class="dot" src="${thumbUrl(x)}" alt=""><span>${esc(label(x))}</span></span>`).join('')}${ic('right', 'sep')}<span class="crumb cur"><img class="dot" src="${thumbUrl(cur)}" alt=""><span>${esc(label(cur))}</span></span></div>`;
+}
+
+function gridSection(parentId) {
+  const k = children(parentId);
+  const here = parentId ? S.nodes.get(parentId) : null;
+  if (!k.length) {
+    return `<div class="empty"><div class="big">${ic(parentId ? 'box' : 'camera')}</div>
+      <h3>${parentId ? 'กล่องนี้ยังว่างอยู่' : 'เริ่มเก็บของชิ้นแรกกันเลย'}</h3>
+      <p>${parentId ? 'กด “เพิ่ม” เพื่อถ่ายรูปของแล้วใส่ไว้ในนี้' : 'ถ่ายรูปของ → ใส่กล่อง → วางบนชั้น แล้วค้นหาชื่อของได้ทันที ว่าอยู่ตรงไหนของบ้าน'}</p>
+      <button class="btn primary" data-act="add">${ic('camera')} ${parentId ? 'เพิ่มของชิ้นแรก' : 'ถ่ายรูปชิ้นแรก'}</button></div>`;
+  }
+  return `<div class="sec"><h2>${here ? 'ข้างใน' : 'ที่เก็บและของทั้งหมด'} <small>${k.length} รายการ</small></h2>
+    <button class="badge" data-act="${S.sel ? 'selcancel' : 'selstart'}" style="padding:5px 12px">${S.sel ? 'ยกเลิกเลือก' : `${ic('select')} เลือกหลายอัน`}</button></div>
+    <div class="grid ${S.sel ? 'selmode' : ''}">${k.map(cardHtml).join('')}</div>`;
+}
+
+function pageHome() {
+  const all = [...S.nodes.values()];
+  const items = all.filter(n => n.type === 'item').length, boxes = all.length - items, al = alertItems().length;
+  return `<div class="top"><div class="brand"><div class="logo">${ic('box')}</div><h1>ของอยู่ไหน</h1></div>${searchBox()}</div>
+    ${all.length ? `<div class="stats"><div class="stat"><b>${items}</b><small>ของทั้งหมด</small></div><div class="stat"><b>${boxes}</b><small>กล่อง / ที่เก็บ</small></div>
+      <a class="stat ${al ? 'alert' : ''}" href="#/exp"><b>${al}</b><small>ใกล้หมดอายุ</small></a></div>` : ''}
+    ${gridSection(null)}`;
+}
+
+function pageNode(id) {
+  const n = S.nodes.get(id);
+  if (!n) { location.replace('#/'); return ''; }
+  document.title = `${label(n)} — ของอยู่ไหน`;
+  const acts = `<div class="actions"><button class="btn" data-act="edit" data-id="${id}">${ic('edit')} แก้ไข</button><button class="btn" data-act="move" data-id="${id}">${ic('move')} ย้ายที่เก็บ</button><button class="btn danger" data-act="del" data-id="${id}">${ic('trash')} ลบ</button></div>`;
+  const tagsHtml = n.tags?.length ? `<div class="chips" style="margin-top:10px">${n.tags.map(t => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
+  const hero = small => `<div class="hero ${small ? 'small' : ''}" data-act="zoom" data-id="${id}"><img src="${thumbUrl(n)}" data-full="${id}" alt="${esc(label(n))}"></div>`;
+  const title = `<div class="titlebar"><h2 class="${n.name ? '' : 'none'}">${esc(n.name || 'ไม่มีชื่อ')}</h2></div>`;
+
+  if (n.type === 'box') {
+    return `<div class="top">${searchBox()}</div>${crumbsHtml(id)}${hero(true)}${title}
+      <div class="meta" style="display:flex;gap:6px;flex-wrap:wrap;margin:0 2px">${badgesHtml(n)}</div>
+      ${n.note ? `<p class="note" style="margin:10px 2px 0">${esc(n.note)}</p>` : ''}${tagsHtml}${acts}${gridSection(id)}`;
+  }
+
+  // item detail: the "where is it" photo trail is the point of the app
+  const chain = [...ancestors(id), n];
+  const steps = chain.map((x, i) => {
+    const me = x.id === id;
+    const sub = me ? 'ของชิ้นนี้' : `${x.type === 'box' ? 'ที่เก็บ' : ''} ${i === 0 ? '· ชั้นนอกสุด' : ''}`.trim();
+    return `<button class="step ${me ? 'me' : ''}" ${me ? '' : `data-go="${x.id}"`}><img class="im" src="${thumbUrl(x)}" alt=""><span class="t">${esc(label(x))}<small>${esc(sub)}</small></span>${me ? '' : ic('right')}</button>`;
+  }).join('');
+  const e = expInfo(n);
+  const back = n.parent ? `<a class="crumb" href="#/n/${n.parent}" style="display:inline-flex;margin:14px 0 4px;padding:4px 14px 4px 8px">${ic('left')}<span>กลับไป ${esc(label(S.nodes.get(n.parent)))}</span></a>` : `<a class="crumb" href="#/" style="display:inline-flex;margin:14px 0 4px;padding:4px 14px 4px 8px">${ic('left')}<span>ทั้งหมด</span></a>`;
+  return `<div class="top">${searchBox()}</div>${back}${hero(false)}${title}
+    <div class="where"><h3>${n.parent ? 'อยู่ที่นี่ (แตะเพื่อเปิด)' : 'ยังไม่ได้เก็บไว้ในที่ไหน'}</h3><div class="steps">${steps}</div></div>
+    <div class="facts">
+      <div class="fact"><label>จำนวนคงเหลือ</label><div class="stepper"><button data-act="qty" data-id="${id}" data-d="-1" aria-label="ลด">${ic('minus')}</button><span class="n">${fmtNum(n.qty)}</span><button data-act="qty" data-id="${id}" data-d="1" aria-label="เพิ่ม">${ic('plus')}</button></div><div style="color:var(--muted);font-size:.85rem;margin-top:2px">${esc(n.unit)} ${n.qty <= 0 ? '· หมดแล้ว' : ''}</div></div>
+      <div class="fact"><label>วันหมดอายุ</label>${e ? `<div class="v">${fmtDate(n.expiry)}</div><span class="badge ${e.cls}" style="margin-top:4px">${e.txt}</span>` : `<div class="v" style="color:var(--muted);font-weight:400">ไม่ระบุ</div>`}</div>
+      ${n.note ? `<div class="fact wide"><label>บันทึก</label><div class="note">${esc(n.note)}</div></div>` : ''}
+      ${n.tags?.length ? `<div class="fact wide"><label>แท็ก</label><div class="chips">${n.tags.map(t => `<span class="chip">#${esc(t)}</span>`).join('')}</div></div>` : ''}
+    </div>
+    <p style="color:var(--muted);font-size:.8rem;margin:12px 2px 0">เพิ่มเมื่อ ${new Date(n.created).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</p>${acts}`;
+}
+
+function runSearch(q) {
+  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terms.length) return { terms, res: [] };
+  const res = [];
+  for (const n of S.nodes.values()) {
+    const own = [n.name, n.note, ...(n.tags || [])].join(' ').toLowerCase();
+    const path = ancestors(n.id).map(label).join(' ').toLowerCase();
+    let score = 0, ownHit = false, ok = true;
+    for (const t of terms) {
+      const nm = (n.name || '').toLowerCase();
+      if (nm.includes(t)) { score += nm.startsWith(t) ? 6 : 4; ownHit = true; }
+      else if (own.includes(t)) { score += 2; ownHit = true; }
+      else if (path.includes(t)) score += 1;
+      else { ok = false; break; }
+    }
+    if (ok && ownHit) res.push({ n, score: score + (n.type === 'item' ? 0.5 : 0) });
+  }
+  res.sort((a, b) => b.score - a.score || a.n.name.localeCompare(b.n.name, 'th'));
+  return { terms, res: res.map(r => r.n) };
+}
+function searchResultsHtml(q) {
+  const { terms, res } = runSearch(q);
+  if (!terms.length) {
+    const recent = [...S.nodes.values()].sort((a, b) => b.updated - a.updated).slice(0, 8);
+    return recent.length ? `<div class="sec"><h2>เพิ่ม/แก้ไขล่าสุด</h2></div><div class="list">${recent.map(n => rowHtml(n)).join('')}</div>`
+      : `<div class="empty"><div class="big">${ic('search')}</div><h3>ยังไม่มีอะไรให้ค้นหา</h3><p>เพิ่มของชิ้นแรกที่หน้าแรกก่อนนะ</p></div>`;
+  }
+  if (!res.length) return `<div class="empty"><div class="big">${ic('search')}</div><h3>ไม่พบ “${esc(q)}”</h3><p>ลองใช้คำสั้นลง หรือชื่ออื่นที่ตั้งไว้ เช่น แท็กหรือบันทึก</p></div>`;
+  return `<div class="sec"><h2>พบ ${res.length} รายการ</h2></div><div class="list">${res.map(n => rowHtml(n, terms)).join('')}</div>`;
+}
+function pageSearch(q) {
+  return `<div class="top">${searchBox(q)}</div><div id="results">${searchResultsHtml(q)}</div>`;
+}
+
+function pageExp() {
+  const items = [...S.nodes.values()].filter(n => n.type === 'item');
+  const out = items.filter(n => n.qty <= 0);
+  const dated = items.filter(n => n.qty > 0 && n.expiry).sort((a, b) => a.expiry.localeCompare(b.expiry));
+  const groups = [
+    ['หมดอายุแล้ว / วันนี้', dated.filter(n => daysLeft(n.expiry) <= 0)],
+    ['ภายใน 7 วัน', dated.filter(n => { const d = daysLeft(n.expiry); return d > 0 && d <= 7; })],
+    ['ภายใน 30 วัน', dated.filter(n => { const d = daysLeft(n.expiry); return d > 7 && d <= 30; })],
+    ['หลังจากนั้น', dated.filter(n => daysLeft(n.expiry) > 30)],
+    ['หมดแล้ว (จำนวน 0)', out],
+  ].filter(g => g[1].length);
+  return `<div class="top"><div class="brand"><div class="logo">${ic('clock')}</div><h1>วันหมดอายุ</h1></div></div>
+    ${groups.length ? groups.map(([t, a]) => `<div class="sec"><h2>${t} <small>${a.length}</small></h2></div><div class="list">${a.map(n => rowHtml(n)).join('')}</div>`).join('')
+      : `<div class="empty"><div class="big">${ic('cal')}</div><h3>ยังไม่มีของที่ระบุวันหมดอายุ</h3><p>ตอนเพิ่มของ ใส่วันหมดอายุไว้ แล้วหน้านี้จะเรียงให้ว่าอะไรต้องรีบใช้ก่อน</p></div>`}`;
+}
+
+function pageSettings() {
+  return `<div class="top"><div class="brand"><div class="logo">${ic('gear')}</div><h1>ตั้งค่าและสำรองข้อมูล</h1></div></div>
+    <div class="settings">
+      <div class="card2"><h3>พื้นที่ที่ใช้</h3><p id="usage">กำลังคำนวณ…</p></div>
+      <div class="card2"><h3>สำรองข้อมูล</h3><p>ข้อมูลและรูปทั้งหมดเก็บอยู่ในเครื่องนี้เท่านั้น (ไม่ได้อัปโหลดที่ไหน) ควรสำรองเป็นไฟล์เก็บไว้เป็นระยะ เผลอล้างข้อมูลเบราว์เซอร์จะได้ไม่หาย</p>
+        <div class="actions" style="margin-top:0"><button class="btn primary" data-act="export" id="bExp">${ic('download')} ดาวน์โหลดไฟล์สำรอง</button><button class="btn" data-act="import">${ic('upload')} นำเข้าจากไฟล์สำรอง</button></div></div>
+      <div class="card2"><h3>ใช้บนมือถือ</h3><p>เปิดหน้านี้ในเบราว์เซอร์มือถือ แล้วเลือก “เพิ่มไปยังหน้าจอหลัก” จะใช้งานเหมือนแอป และเปิดได้แม้ไม่มีอินเทอร์เน็ต</p></div>
+      <div class="card2"><h3>ล้างข้อมูลทั้งหมด</h3><p>ลบของ กล่อง และรูปทั้งหมดในเครื่องนี้ กู้คืนไม่ได้ถ้าไม่มีไฟล์สำรอง</p><button class="btn danger" data-act="wipe">${ic('trash')} ลบทุกอย่าง</button></div>
+    </div>`;
+}
+
+function navHtml() {
+  const r = S.route?.name, al = alertItems().length;
+  const a = (href, on, icon, t, extra = '') => `<a href="${href}" class="${on ? 'on' : ''}">${ic(icon)}<span>${t}</span>${extra}</a>`;
+  return `<div class="in">${a('#/', r === 'home' || r === 'node', 'home', 'ที่เก็บ')}${a('#/s', r === 'search', 'search', 'ค้นหา')}${a('#/exp', r === 'exp', 'clock', 'หมดอายุ', al ? `<span class="cnt">${al}</span>` : '')}${a('#/set', r === 'set', 'gear', 'ตั้งค่า')}</div>`;
+}
+
+function selbarHtml() {
+  const n = S.sel.size, off = n ? '' : 'disabled';
+  return `<div class="selbar"><span class="cn">เลือก ${n}</span>
+    <button class="btn" data-act="selall">ทั้งหมด</button>
+    <button class="btn" data-act="selwrap" ${off}>${ic('box')} ใส่กล่องใหม่</button>
+    <button class="btn" data-act="selmove" ${off}>${ic('move')} ย้าย</button>
+    <button class="btn" data-act="seldel" ${off}>${ic('trash')} ลบ</button>
+    <button class="btn" data-act="selcancel">${ic('x')}</button></div>`;
+}
+
+let fullUrls = [];
+function render({ keep = false } = {}) {
+  S.route = route();
+  const r = S.route, y = window.scrollY;
+  document.title = 'ของอยู่ไหน — สมุดจดที่เก็บของ';
+  let html = '';
+  if (r.name === 'home') html = pageHome();
+  else if (r.name === 'node') html = pageNode(r.id);
+  else if (r.name === 'search') html = pageSearch(r.q);
+  else if (r.name === 'exp') html = pageExp();
+  else html = pageSettings();
+  const node = r.name === 'node' ? S.nodes.get(r.id) : null;
+  const canAdd = (r.name === 'home' || node?.type === 'box') && !S.sel && S.nodes.size + (r.name === 'home' ? 0 : 1) > 0;
+  fullUrls.forEach(u => URL.revokeObjectURL(u)); fullUrls = [];
+  $('#app').innerHTML = html + (canAdd ? `<button class="fab" data-act="add">${ic('plus')} เพิ่ม</button>` : '') + (S.sel ? selbarHtml() : '');
+  $('#nav').innerHTML = navHtml();
+  window.scrollTo(0, keep ? y : 0);
+  $$('img[data-full]').forEach(async img => {
+    const b = await DB.photo(img.dataset.full).catch(() => null);
+    if (b && img.isConnected) { const u = URL.createObjectURL(b); fullUrls.push(u); img.src = u; }
+  });
+  if (r.name === 'search' && S.focusQ) { const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  S.focusQ = false;
+  if (r.name === 'set') showUsage();
+}
+
+async function showUsage() {
+  const el = $('#usage'); if (!el) return;
+  const items = [...S.nodes.values()].filter(n => n.type === 'item').length;
+  let txt = `ของ ${items} ชิ้น · ที่เก็บ ${S.nodes.size - items} แห่ง`;
+  try {
+    const e = await navigator.storage.estimate();
+    txt += ` · ใช้พื้นที่ ${(e.usage / 1048576).toFixed(1)} MB`;
+    if (navigator.storage.persisted) txt += (await navigator.storage.persisted()) ? ' · เบราว์เซอร์รับปากจะไม่ลบข้อมูลเอง' : ' · เบราว์เซอร์อาจลบข้อมูลเมื่อพื้นที่เต็ม (แนะนำให้สำรองไฟล์)';
+  } catch { /* estimate unsupported */ }
+  const el2 = $('#usage'); if (el2) el2.textContent = txt;
+}
+
+/* ───────────── backup ───────────── */
+async function exportAll() {
+  const btn = $('#bExp'); if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin"></span> กำลังรวมไฟล์…'; }
+  const out = { app: 'stuff-finder', version: 1, exported: new Date().toISOString(), nodes: [] };
+  for (const n of S.nodes.values()) out.nodes.push({ ...n, thumb: await blobToData(n.thumb), photo: await blobToData(await DB.photo(n.id)) });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
+  const t = new Date();
+  a.download = `ของอยู่ไหน-สำรอง-${t.getFullYear()}${String(t.getMonth() + 1).padStart(2, '0')}${String(t.getDate()).padStart(2, '0')}.json`;
+  a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  if (btn) { btn.disabled = false; btn.innerHTML = `${ic('download')} ดาวน์โหลดไฟล์สำรอง`; }
+  toast('สร้างไฟล์สำรองแล้ว');
+}
+async function importFile(file) {
+  try {
+    const data = JSON.parse(await file.text());
+    if (data.app !== 'stuff-finder' || !Array.isArray(data.nodes)) throw new Error('bad');
+    const put = [], photos = [];
+    for (const r of data.nodes) {
+      const { photo, thumb, ...n } = r;
+      n.thumb = await dataToBlob(thumb || photo);
+      if (!n.id || !n.thumb) continue;
+      put.push(n); photos.push([n.id, await dataToBlob(photo)]);
+    }
+    await commit({ put, photos });
+    render();
+    toast(`นำเข้า ${put.length} รายการแล้ว`);
+  } catch { toast('ไฟล์นี้ไม่ใช่ไฟล์สำรองของแอปนี้'); }
+}
+
+/* ───────────── actions ───────────── */
+const curParent = () => (S.route.name === 'node' && S.nodes.get(S.route.id)?.type === 'box' ? S.route.id : null);
+const A = {
+  add: () => openForm({ parent: curParent() }),
+  zoom: d => zoom(d.id),
+  edit: d => openForm({ id: d.id }),
+  async move(d) {
+    const n = S.nodes.get(d.id);
+    const r = await pickLocation({ title: `ย้าย “${label(n)}” ไปไว้ที่`, exclude: new Set([n.id, ...descendants(n.id).map(x => x.id)]), current: n.parent, confirm: 'ย้ายมาที่นี่' });
+    if (r) { await moveNodes([n.id], r.id); toast('ย้ายแล้ว'); render({ keep: true }); }
+  },
+  async del(d) {
+    const n = S.nodes.get(d.id), parent = n?.parent;
+    if (await deleteNode(d.id)) { if (S.route.name === 'node' && S.route.id === d.id) location.hash = parent && S.nodes.has(parent) ? '#/n/' + parent : '#/'; else render({ keep: true }); }
+  },
+  async qty(d) {
+    const n = S.nodes.get(d.id);
+    await commit({ put: [{ ...n, qty: Math.max(0, num(n.qty) + +d.d) }] });
+    render({ keep: true });
+  },
+  clearq: () => { S.focusQ = true; location.hash = '#/s'; },
+  selstart: () => { S.sel = new Set(); render({ keep: true }); },
+  selcancel: () => { S.sel = null; render({ keep: true }); },
+  selall: () => { const k = children(curParent()); S.sel = S.sel.size === k.length ? new Set() : new Set(k.map(x => x.id)); render({ keep: true }); },
+  async selmove() {
+    const ids = [...S.sel];
+    const ex = new Set(ids.flatMap(id => [id, ...descendants(id).map(x => x.id)]));
+    const r = await pickLocation({ title: `ย้าย ${ids.length} รายการไปไว้ที่`, exclude: ex, current: curParent(), confirm: 'ย้ายมาที่นี่' });
+    if (r) { await moveNodes(ids, r.id); S.sel = null; toast('ย้ายแล้ว'); render({ keep: true }); }
+  },
+  selwrap() {
+    const ids = [...S.sel], parent = curParent();
+    openForm({ type: 'box', lockType: true, parent, onSaved: async box => { await moveNodes(ids, box.id); S.sel = null; toast(`ใส่ ${ids.length} รายการลงในกล่องใหม่แล้ว`); render({ keep: true }); } });
+  },
+  async seldel() {
+    const ids = [...S.sel];
+    const ok = await ask({ title: `ลบ ${ids.length} รายการ?`, text: 'ถ้ามีกล่อง ของข้างในจะถูกลบด้วย (กดเลิกทำได้ทันทีหลังลบ)', buttons: [{ label: 'ลบ', value: true, cls: 'danger' }, { label: 'ยกเลิก', value: null }] });
+    if (!ok) return;
+    const all = new Set(ids.flatMap(id => [id, ...descendants(id).map(x => x.id)]));
+    await commit({ del: [...all] }, `ลบ ${ids.length} รายการแล้ว`);
+    S.sel = null; render({ keep: true });
+  },
+  export: exportAll,
+  import: () => { const i = $('#fileImport'); i.value = ''; i.onchange = () => i.files[0] && importFile(i.files[0]); i.click(); },
+  async wipe() {
+    const ok = await ask({ title: 'ลบข้อมูลทั้งหมด?', text: 'ของ กล่อง และรูปทั้งหมดจะหายไป กู้คืนไม่ได้', buttons: [{ label: 'ลบทุกอย่าง', value: true, cls: 'danger' }, { label: 'ยกเลิก', value: null }] });
+    if (!ok) return;
+    await DB.clear(); S.urls.forEach(u => URL.revokeObjectURL(u.url)); S.urls.clear(); S.nodes.clear(); reindex();
+    location.hash = '#/'; render(); toast('ลบทั้งหมดแล้ว');
+  },
+  toastact: () => { $('#toast').classList.remove('show'); S.toastFn?.(); },
+};
+
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-act]');
+  if (a && A[a.dataset.act]) { e.preventDefault(); A[a.dataset.act](a.dataset, a); return; }
+  const g = e.target.closest('[data-go]');
+  if (g) {
+    if (S.sel && g.dataset.card) {
+      S.sel.has(g.dataset.go) ? S.sel.delete(g.dataset.go) : S.sel.add(g.dataset.go);
+      render({ keep: true });
+    } else if (!S.sel || !g.dataset.card) location.hash = '#/n/' + g.dataset.go;
+  }
+});
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-go][role=button]')) { e.preventDefault(); e.target.click(); }
+});
+document.addEventListener('input', e => {
+  if (e.target.id !== 'q') return;
+  const v = e.target.value, enc = '#/s/' + encodeURIComponent(v);
+  if (S.route.name === 'search') {
+    history.replaceState(null, '', v ? enc : '#/s');
+    $('#results').innerHTML = searchResultsHtml(v);
+    const cl = $('.search .clear');
+    if (v && !cl) e.target.parentElement.insertAdjacentHTML('beforeend', `<button class="clear" data-act="clearq" aria-label="ล้างคำค้น">${ic('x')}</button>`);
+    if (!v && cl) cl.remove();
+  } else { S.focusQ = true; location.hash = enc; }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'q') e.target.blur(); });
+
+window.addEventListener('hashchange', () => { S.sel = null; if (route().name === 'search' && !S.route?.q && route().q === '') S.focusQ = true; render(); });
+
+/* ───────────── boot ───────────── */
+(async function boot() {
+  const nav = document.createElement('nav'); nav.className = 'nav'; nav.id = 'nav'; nav.setAttribute('aria-label', 'เมนูหลัก');
+  document.body.append(nav);
+  try {
+    await DB.open();
+    (await DB.all()).forEach(n => S.nodes.set(n.id, n));
+    reindex();
+  } catch {
+    $('#app').innerHTML = `<div class="empty"><div class="big">${ic('alert')}</div><h3>เปิดที่เก็บข้อมูลไม่ได้</h3><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p></div>`;
+    return;
+  }
+  if (route().name === 'search') S.focusQ = true;
+  render();
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+})();
+})();

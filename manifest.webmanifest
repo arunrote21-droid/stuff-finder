@@ -1,0 +1,12 @@
+{
+  "name": "ของอยู่ไหน",
+  "short_name": "ของอยู่ไหน",
+  "description": "สมุดจดที่เก็บของด้วยรูปภาพ",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f2ec",
+  "theme_color": "#0f766e",
+  "lang": "th",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

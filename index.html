@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ของอยู่ไหน — สมุดจดที่เก็บของ</title>
+<meta name="description" content="ถ่ายรูปของ กล่อง ตู้ แล้วจัดซ้อนกันเหมือนโฟลเดอร์ ค้นหาแล้วรู้ทันทีว่าของอยู่ตรงไหน">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app"></div>
+<div id="layer"></div>
+<div id="toast" role="status" aria-live="polite"></div>
+<input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
+<input type="file" id="fileGallery" accept="image/*" hidden>
+<input type="file" id="fileImport" accept="application/json,.json" hidden>
+<script src="app.js"></script>
+</body>
+</html>
