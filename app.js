@@ -46,8 +46,13 @@ const DB = {
   db: null,
   open() {
     return new Promise((res, rej) => {
-      const r = indexedDB.open('stuff-finder', 1);
-      r.onupgradeneeded = () => { r.result.createObjectStore('nodes', { keyPath: 'id' }); r.result.createObjectStore('photos'); };
+      const r = indexedDB.open('stuff-finder', 2);
+      r.onupgradeneeded = () => {
+        const d = r.result;
+        if (!d.objectStoreNames.contains('nodes')) d.createObjectStore('nodes', { keyPath: 'id' });
+        if (!d.objectStoreNames.contains('photos')) d.createObjectStore('photos');
+        if (!d.objectStoreNames.contains('thumbs')) d.createObjectStore('thumbs'); // v2: thumbnails live apart from node data
+      };
       r.onsuccess = () => { this.db = r.result; res(); };
       r.onerror = () => rej(r.error);
     });
@@ -63,14 +68,21 @@ const DB = {
   all: () => DB.run(['nodes'], 'readonly', s => s.getAll()),
   photo: id => DB.run(['photos'], 'readonly', s => s.get(id)),
   // one atomic write: nodes to put, ids to delete, [id, blob] photos to put
-  write({ put = [], del = [], photos = [] }) {
-    return DB.run(['nodes', 'photos'], 'readwrite', (ns, ps) => {
-      put.forEach(n => ns.put(n));
+  // Node records are plain data (no blobs), so editing a node never rewrites its pictures.
+  write({ put = [], del = [], photos = [], thumbs = [] }) {
+    return DB.run(['nodes', 'photos', 'thumbs'], 'readwrite', (ns, ps, ts) => {
+      put.forEach(n => { const { thumb, ...plain } = n; ns.put(plain); });
       photos.forEach(([id, b]) => b && ps.put(b, id));
-      del.forEach(id => { ns.delete(id); ps.delete(id); });
+      thumbs.forEach(([id, b]) => b && ts.put(b, id));
+      del.forEach(id => { ns.delete(id); ps.delete(id); ts.delete(id); });
     });
   },
-  clear: () => DB.run(['nodes', 'photos'], 'readwrite', (ns, ps) => { ns.clear(); ps.clear(); }),
+  async allThumbs() {
+    const keys = await DB.run(['thumbs'], 'readonly', s => s.getAllKeys());
+    const vals = await DB.run(['thumbs'], 'readonly', s => s.getAll());
+    return new Map(keys.map((k, i) => [k, vals[i]]));
+  },
+  clear: () => DB.run(['nodes', 'photos', 'thumbs'], 'readwrite', (ns, ps, ts) => { ns.clear(); ps.clear(); ts.clear(); }),
 };
 
 /* ───────────── tag list (choices shown as tap-to-pick chips) ───────────── */
@@ -121,6 +133,7 @@ function thumbUrl(n) {
   const c = S.urls.get(n.id);
   if (c && c.v === n.updated) return c.url;
   if (c) URL.revokeObjectURL(c.url);
+  if (!n.thumb) return 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 4 4%22%3E%3Crect width=%224%22 height=%224%22 fill=%22%23999%22/%3E%3C/svg%3E';
   const url = URL.createObjectURL(n.thumb);
   S.urls.set(n.id, { v: n.updated, url });
   return url;
@@ -148,7 +161,7 @@ const alertItems = () => [...S.nodes.values()].filter(isAlert);
 const alertCount = id => itemsUnder(id).filter(isAlert).length;
 
 /* ───────────── image processing ───────────── */
-async function processImage(file) {
+async function processImage(file, thumbOnly = false) {
   let src;
   try { src = await createImageBitmap(file, { imageOrientation: 'from-image' }); }
   catch {
@@ -165,7 +178,7 @@ async function processImage(file) {
     g.drawImage(src, 0, 0, c.width, c.height);
     return new Promise(r => c.toBlob(r, 'image/jpeg', q));
   };
-  const [full, thumb] = await Promise.all([mk(1400, 0.85), mk(420, 0.78)]);
+  const [full, thumb] = await Promise.all([thumbOnly ? null : mk(1400, 0.85), mk(420, 0.78)]);
   src.close?.();
   return { full, thumb };
 }
@@ -277,17 +290,26 @@ async function zoom(id) {
 }
 
 /* ───────────── data operations ───────────── */
-async function commit({ put = [], del = [], photos = [] }, undoLabel) {
+// a fresh in-memory copy of a blob that was read back from IndexedDB, safe to store again
+const fresh = async b => (b ? new Blob([await b.arrayBuffer()], { type: b.type }) : null);
+async function rebuildThumb(id) {
+  const photo = await DB.photo(id);
+  if (!photo) return null;
+  const { thumb } = await processImage(photo, true);
+  return thumb;
+}
+async function commit({ put = [], del = [], photos = [], thumbs = [] }, undoLabel) {
   const prev = put.map(n => S.nodes.get(n.id)).filter(Boolean);
   const gone = del.map(id => S.nodes.get(id)).filter(Boolean);
-  const gonePhotos = undoLabel ? await Promise.all(gone.map(n => DB.photo(n.id).then(b => [n.id, b]))) : [];
-  await DB.write({ put, del, photos });
+  const gonePhotos = undoLabel ? await Promise.all(gone.map(async n => [n.id, await fresh(await DB.photo(n.id))])) : [];
+  const goneThumbs = undoLabel ? await Promise.all(gone.map(async n => [n.id, await fresh(n.thumb)])) : [];
+  await DB.write({ put, del, photos, thumbs });
   del.forEach(id => { const c = S.urls.get(id); if (c) URL.revokeObjectURL(c.url); S.urls.delete(id); S.nodes.delete(id); });
   put.forEach(n => S.nodes.set(n.id, n));
   reindex();
   if (undoLabel) {
     toast(undoLabel, { label: 'เลิกทำ', fn: async () => {
-      await DB.write({ put: [...prev, ...gone], photos: gonePhotos });
+      await DB.write({ put: [...prev, ...gone], photos: gonePhotos, thumbs: goneThumbs });
       [...prev, ...gone].forEach(n => S.nodes.set(n.id, n));
       reindex(); render({ keep: true }); toast('กู้คืนแล้ว');
     } });
@@ -483,7 +505,14 @@ function openForm(opts = {}) {
     });
     if (d.photo.isNew) n.thumb = d.photo.thumb;
     $f('#save').disabled = true;
-    await commit({ put: [n], photos: d.photo.isNew ? [[n.id, d.photo.full]] : [] });
+    try {
+      await commit({ put: [n], photos: d.photo.isNew ? [[n.id, d.photo.full]] : [], thumbs: d.photo.isNew ? [[n.id, d.photo.thumb]] : [] });
+    } catch (err) {
+      console.error(err);
+      $f('#save').disabled = false;
+      toast('บันทึกไม่สำเร็จ ลองอีกครั้งนะ');
+      return;
+    }
     s.close();
     opts.onSaved?.(n);
     if (again) { openForm({ type: n.type, parent: n.parent, lockType: opts.lockType }); toast(`เพิ่ม “${label(n)}” แล้ว`); }
@@ -827,7 +856,7 @@ async function importFile(file) {
       if (!n.id || !n.thumb) continue;
       put.push(n); photos.push([n.id, await dataToBlob(photo)]);
     }
-    await commit({ put, photos });
+    await commit({ put, photos, thumbs: put.map(n => [n.id, n.thumb]) });
     if (Array.isArray(data.tagList)) { data.tagList.forEach(t => { if (!tagList.includes(t)) tagList.push(t); }); }
     put.forEach(n => (n.tags || []).forEach(t => { if (!tagList.includes(t)) tagList.push(t); }));
     saveTags();
@@ -905,7 +934,11 @@ const A = {
 
 document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
-  if (a && A[a.dataset.act]) { e.preventDefault(); A[a.dataset.act](a.dataset, a); return; }
+  if (a && A[a.dataset.act]) {
+    e.preventDefault();
+    Promise.resolve(A[a.dataset.act](a.dataset, a)).catch(err => { console.error(err); toast('ทำไม่สำเร็จ ลองอีกครั้งนะ'); });
+    return;
+  }
   const gl = e.target.closest('[data-gol]');
   if (gl) { location.hash = '#/l/' + gl.dataset.gol; return; }
   const g = e.target.closest('[data-go]');
@@ -934,6 +967,26 @@ document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id
 
 window.addEventListener('hashchange', () => { S.sel = null; if (route().name === 'search' && !S.route?.q && route().q === '') S.focusQ = true; render(); });
 
+/* a thumbnail that fails to decode is rebuilt from the full photo, once per item */
+const healed = new Set();
+document.addEventListener('error', async e => {
+  const img = e.target;
+  if (img.tagName !== 'IMG' || !img.src.startsWith('blob:')) return;
+  for (const [id, c] of S.urls) {
+    if (c.url !== img.src || healed.has(id)) continue;
+    healed.add(id);
+    try {
+      const t = await rebuildThumb(id);
+      if (!t) return;
+      await DB.write({ thumbs: [[id, t]] });
+      S.nodes.get(id).thumb = t;
+      URL.revokeObjectURL(c.url); S.urls.delete(id);
+      render({ keep: true });
+    } catch { /* leave the placeholder */ }
+    return;
+  }
+}, true);
+
 /* ───────────── boot ───────────── */
 (async function boot() {
   const nav = document.createElement('nav'); nav.className = 'nav'; nav.id = 'nav'; nav.setAttribute('aria-label', 'เมนูหลัก');
@@ -944,7 +997,20 @@ window.addEventListener('hashchange', () => { S.sel = null; if (route().name ===
   document.body.append(rb);
   try {
     await DB.open();
-    (await DB.all()).forEach(n => S.nodes.set(n.id, n));
+    const rows = await DB.all(), thumbs = await DB.allThumbs();
+    const rebuilt = [];
+    for (const n of rows) {
+      const legacy = n.thumb; // v1 stored the thumbnail inside the node; those copies may be damaged
+      n.thumb = thumbs.get(n.id);
+      if (!n.thumb) {
+        let t = null;
+        try { t = await rebuildThumb(n.id); } catch { /* photo unreadable, fall back below */ }
+        if (t) { await DB.write({ thumbs: [[n.id, t]] }); n.thumb = t; rebuilt.push(n); }
+        else n.thumb = legacy;
+      }
+      S.nodes.set(n.id, n);
+    }
+    if (rebuilt.length) await DB.write({ put: rebuilt }).catch(() => {}); // drop the old embedded copies
     reindex();
     initTags();
   } catch {
