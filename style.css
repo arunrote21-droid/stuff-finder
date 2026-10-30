@@ -237,3 +237,14 @@ button.chip{border:0;cursor:pointer}
 .resetbtn{position:fixed;left:max(14px,calc(50vw - 440px + 14px));bottom:calc(var(--nav) + var(--safe-b) + 16px);z-index:25;width:38px;height:38px;border-radius:50%;background:var(--surface);color:var(--muted);border:1px solid var(--line);box-shadow:var(--shadow);display:grid;place-items:center;opacity:.85}
 .resetbtn:active{transform:scale(.92)}
 .resetbtn.spinning svg{animation:rot .6s linear infinite}
+
+.star{color:#f59e0b}
+.titlebar .iconbtn{flex:none;margin-top:2px}
+.lrow{display:flex;gap:12px;align-items:center;background:var(--surface);border-radius:14px;padding:8px 12px 8px 8px;box-shadow:var(--shadow);cursor:pointer;width:100%;text-align:left}
+.lrow:active{transform:scale(.985)}
+.lrow .lt{width:56px;height:56px;border-radius:12px;object-fit:cover;background:var(--surface2);flex:none}
+.lrow .mid{flex:1;min-width:0}
+.lrow .nm{font-weight:600;line-height:1.3;overflow:hidden;text-overflow:ellipsis}
+.lrow .meta{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
+.lrow>.i{color:var(--muted)}
+.nav a{font-size:.7rem}

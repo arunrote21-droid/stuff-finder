@@ -34,8 +34,11 @@ const ICONS = {
   select: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
   layers: '<path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/>',
+  star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3-6.2 3.3L7 14.2 2 9.3l6.9-1z"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
 };
+const starIc = on => `<svg class="i" viewBox="0 0 24 24" aria-hidden="true" style="${on ? 'fill:#f59e0b;stroke:#f59e0b' : ''}">${ICONS.star}</svg>`;
 const ic = (n, cls = '') => `<svg class="i ${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]}</svg>`;
 
 /* ───────────── storage (IndexedDB) ───────────── */
@@ -447,6 +450,7 @@ function route() {
   try { h = decodeURIComponent(h); } catch { /* keep raw */ }
   if (h.startsWith('/n/')) return { name: 'node', id: h.slice(3) };
   if (h === '/s' || h.startsWith('/s/')) return { name: 'search', q: h.slice(3) };
+  if (h === '/l' || h.startsWith('/l/')) return { name: 'list', id: h.slice(3) };
   if (h === '/exp') return { name: 'exp' };
   if (h === '/set') return { name: 'set' };
   return { name: 'home' };
@@ -484,7 +488,7 @@ function cardHtml(n) {
   }
   return `<div class="card ${sel ? 'sel' : ''}" data-go="${n.id}" data-card="1" role="button" tabindex="0">
     <div class="ph"><img src="${thumbUrl(n)}" alt="" loading="lazy">${tags}${S.sel ? `<span class="check">${ic('check')}</span>` : ''}</div>
-    <div class="body"><div class="nm ${n.name ? '' : 'none'}">${esc(n.name || 'ไม่มีชื่อ')}</div><div class="sub">${esc(sub)}</div></div></div>`;
+    <div class="body"><div class="nm ${n.name ? '' : 'none'}">${n.fav ? '<span class="star">★</span> ' : ''}${esc(n.name || 'ไม่มีชื่อ')}</div><div class="sub">${esc(sub)}</div></div></div>`;
 }
 
 function pathHtml(n) {
@@ -526,9 +530,11 @@ function gridSection(parentId) {
 function pageHome() {
   const all = [...S.nodes.values()];
   const items = all.filter(n => n.type === 'item').length, boxes = all.length - items, al = alertItems().length;
+  const favs = all.filter(n => n.fav).sort(cmp);
   return `<div class="top"><div class="brand"><div class="logo">${ic('box')}</div><h1>ของอยู่ไหน</h1></div>${searchBox()}</div>
     ${all.length ? `<div class="stats"><div class="stat"><b>${items}</b><small>ของทั้งหมด</small></div><div class="stat"><b>${boxes}</b><small>กล่อง / ที่เก็บ</small></div>
       <a class="stat ${al ? 'alert' : ''}" href="#/exp"><b>${al}</b><small>ใกล้หมดอายุ</small></a></div>` : ''}
+    ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="grid ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
     ${gridSection(null)}`;
 }
 
@@ -539,12 +545,14 @@ function pageNode(id) {
   const acts = `<div class="actions"><button class="btn" data-act="edit" data-id="${id}">${ic('edit')} แก้ไข</button><button class="btn" data-act="move" data-id="${id}">${ic('move')} ย้ายที่เก็บ</button><button class="btn danger" data-act="del" data-id="${id}">${ic('trash')} ลบ</button></div>`;
   const tagsHtml = n.tags?.length ? `<div class="chips" style="margin-top:10px">${n.tags.map(t => `<span class="chip">#${esc(t)}</span>`).join('')}</div>` : '';
   const hero = small => `<div class="hero ${small ? 'small' : ''}" data-act="zoom" data-id="${id}"><img src="${thumbUrl(n)}" data-full="${id}" alt="${esc(label(n))}"></div>`;
-  const title = `<div class="titlebar"><h2 class="${n.name ? '' : 'none'}">${esc(n.name || 'ไม่มีชื่อ')}</h2></div>`;
+  const title = `<div class="titlebar"><h2 class="${n.name ? '' : 'none'}">${esc(n.name || 'ไม่มีชื่อ')}</h2>
+    <button class="iconbtn" data-act="fav" data-id="${id}" aria-label="${n.fav ? 'เอาออกจากรายการโปรด' : 'ติดดาวรายการโปรด'}" aria-pressed="${!!n.fav}">${starIc(n.fav)}</button></div>`;
 
   if (n.type === 'box') {
     return `<div class="top">${searchBox()}</div>${crumbsHtml(id)}${hero(true)}${title}
       <div class="meta" style="display:flex;gap:6px;flex-wrap:wrap;margin:0 2px">${badgesHtml(n)}</div>
-      ${n.note ? `<p class="note" style="margin:10px 2px 0">${esc(n.note)}</p>` : ''}${tagsHtml}${acts}${gridSection(id)}`;
+      ${n.note ? `<p class="note" style="margin:10px 2px 0">${esc(n.note)}</p>` : ''}${tagsHtml}${acts}
+      <a class="btn block" href="#/l/${id}" style="margin-top:10px">${ic('list')} ดูของข้างในเป็นรายการ</a>${gridSection(id)}`;
   }
 
   // item detail: the "where is it" photo trail is the point of the app
@@ -565,6 +573,47 @@ function pageNode(id) {
       ${n.tags?.length ? `<div class="fact wide"><label>แท็ก</label><div class="chips">${n.tags.map(t => `<span class="chip">#${esc(t)}</span>`).join('')}</div></div>` : ''}
     </div>
     <p style="color:var(--muted);font-size:.8rem;margin:12px 2px 0">เพิ่มเมื่อ ${new Date(n.created).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</p>${acts}`;
+}
+
+const pathStr = n => [...ancestors(n.id), n].map(label).join(' › ');
+function miniItem(n) {
+  return `<div class="lrow" data-go="${n.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(n)}" alt="" loading="lazy">
+    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${esc(label(n))}</div><div class="meta">${badgesHtml(n)}</div></div>${ic('right')}</div>`;
+}
+function pageList() {
+  const boxes = [...S.nodes.values()].filter(n => n.type === 'box')
+    .sort((a, b) => (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || pathStr(a).localeCompare(pathStr(b), 'th'));
+  const head = `<div class="top"><div class="brand"><div class="logo">${ic('list')}</div><h1>รายการในที่เก็บ</h1></div></div>`;
+  if (!boxes.length) return head + `<div class="empty"><div class="big">${ic('box')}</div><h3>ยังไม่มีตู้ กล่อง หรือถุง</h3><p>สร้างที่หน้าแรกก่อน แล้วกลับมาดูว่าข้างในมีอะไรบ้างที่นี่</p></div>`;
+  return head + `<p style="color:var(--muted);margin:0 2px 6px">แตะตู้ กล่อง หรือถุง เพื่อดูของทั้งหมดข้างในเป็นรายการ</p>
+    <div class="list">${boxes.map(b => {
+      const c = itemsUnder(b.id).length, a = alertCount(b.id), anc = ancestors(b.id).map(label).join(' › ');
+      return `<div class="lrow" data-gol="${b.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(b)}" alt="" loading="lazy">
+        <div class="mid"><div class="nm">${b.fav ? '<span class="star">★</span> ' : ''}${esc(label(b))}${b.kind && b.kind !== b.name && !(b.name || '').startsWith(b.kind) ? ` <small style="color:var(--muted);font-weight:400">${esc(b.kind)}</small>` : ''}</div>
+        <div class="sub" style="color:var(--muted);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${anc ? 'อยู่ใน ' + esc(anc) : 'ชั้นนอกสุด'}</div>
+        <div class="meta"><span class="badge">${c} ชิ้น</span>${a ? `<span class="badge bad">${ic('alert')} ใกล้หมดอายุ ${a}</span>` : ''}</div></div>${ic('right')}</div>`;
+    }).join('')}</div>`;
+}
+function pageListOf(id) {
+  const n = S.nodes.get(id);
+  if (!n || n.type !== 'box') { location.replace('#/l'); return ''; }
+  document.title = `${label(n)} — ของอยู่ไหน`;
+  const groups = [];
+  const direct = children(id).filter(x => x.type === 'item');
+  if (direct.length) groups.push([null, direct]);
+  descendants(id).filter(x => x.type === 'box').sort((a, b) => pathStr(a).localeCompare(pathStr(b), 'th')).forEach(b => {
+    const its = children(b.id).filter(x => x.type === 'item');
+    if (its.length) groups.push([b, its]);
+  });
+  const total = itemsUnder(id).length;
+  const rel = b => { const ch = [...ancestors(b.id), b]; return ch.slice(ch.findIndex(x => x.id === id) + 1).map(label).join(' › '); };
+  return `<div class="top"><a class="crumb" href="#/l" style="display:inline-flex;padding:4px 14px 4px 8px">${ic('left')}<span>รายการที่เก็บ</span></a></div>
+    <div class="row" style="margin-top:6px"><img class="thumb" src="${thumbUrl(n)}" alt="" data-act="zoom" data-id="${id}"><div class="mid"><div class="nm" style="font-size:1.25rem">${esc(label(n))}</div>
+      <div class="path" style="margin-top:2px">${esc(ancestors(id).map(label).join(' › ') || 'ชั้นนอกสุด')}</div><div class="meta"><span class="badge">${total} ชิ้นข้างใน</span></div></div>
+      <button class="iconbtn" data-act="fav" data-id="${id}" aria-label="ติดดาว">${starIc(n.fav)}</button></div>
+    <a class="btn block" href="#/n/${id}" style="margin-top:10px">${ic('image')} เปิดดูแบบรูป / เพิ่มของ</a>
+    ${groups.length ? groups.map(([b, its]) => `<div class="sec"><h2>${b ? `<img class="dot" src="${thumbUrl(b)}" alt="" style="display:inline-block;vertical-align:middle;margin-right:6px">${esc(rel(b))}` : 'วางอยู่ในนี้โดยตรง'} <small>${its.length}</small></h2></div><div class="list">${its.map(miniItem).join('')}</div>`).join('')
+      : `<div class="empty"><div class="big">${ic('box')}</div><h3>ยังไม่มีของข้างใน</h3><p>แตะ “เปิดดูแบบรูป” แล้วกดเพิ่มของได้เลย</p></div>`}`;
 }
 
 function runSearch(q) {
@@ -631,7 +680,7 @@ function pageSettings() {
 function navHtml() {
   const r = S.route?.name, al = alertItems().length;
   const a = (href, on, icon, t, extra = '') => `<a href="${href}" class="${on ? 'on' : ''}">${ic(icon)}<span>${t}</span>${extra}</a>`;
-  return `<div class="in">${a('#/', r === 'home' || r === 'node', 'home', 'ที่เก็บ')}${a('#/s', r === 'search', 'search', 'ค้นหา')}${a('#/exp', r === 'exp', 'clock', 'หมดอายุ', al ? `<span class="cnt">${al}</span>` : '')}${a('#/set', r === 'set', 'gear', 'ตั้งค่า')}</div>`;
+  return `<div class="in">${a('#/', r === 'home' || r === 'node', 'home', 'ที่เก็บ')}${a('#/l', r === 'list', 'list', 'รายการ')}${a('#/s', r === 'search', 'search', 'ค้นหา')}${a('#/exp', r === 'exp', 'clock', 'หมดอายุ', al ? `<span class="cnt">${al}</span>` : '')}${a('#/set', r === 'set', 'gear', 'ตั้งค่า')}</div>`;
 }
 
 function selbarHtml() {
@@ -653,6 +702,7 @@ function render({ keep = false } = {}) {
   if (r.name === 'home') html = pageHome();
   else if (r.name === 'node') html = pageNode(r.id);
   else if (r.name === 'search') html = pageSearch(r.q);
+  else if (r.name === 'list') html = r.id ? pageListOf(r.id) : pageList();
   else if (r.name === 'exp') html = pageExp();
   else html = pageSettings();
   const node = r.name === 'node' ? S.nodes.get(r.id) : null;
@@ -732,6 +782,12 @@ const A = {
     await commit({ put: [{ ...n, qty: Math.max(0, num(n.qty) + +d.d) }] });
     render({ keep: true });
   },
+  async fav(d) {
+    const n = S.nodes.get(d.id);
+    await commit({ put: [{ ...n, fav: !n.fav }] });
+    toast(n.fav ? 'เอาออกจากรายการโปรดแล้ว' : 'ติดดาวแล้ว จะขึ้นที่หน้าแรก');
+    render({ keep: true });
+  },
   clearq: () => { S.focusQ = true; location.hash = '#/s'; },
   selstart: () => { S.sel = new Set(); render({ keep: true }); },
   selcancel: () => { S.sel = null; render({ keep: true }); },
@@ -775,6 +831,8 @@ const A = {
 document.addEventListener('click', e => {
   const a = e.target.closest('[data-act]');
   if (a && A[a.dataset.act]) { e.preventDefault(); A[a.dataset.act](a.dataset, a); return; }
+  const gl = e.target.closest('[data-gol]');
+  if (gl) { location.hash = '#/l/' + gl.dataset.gol; return; }
   const g = e.target.closest('[data-go]');
   if (g) {
     if (S.sel && g.dataset.card) {
@@ -784,7 +842,7 @@ document.addEventListener('click', e => {
   }
 });
 document.addEventListener('keydown', e => {
-  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-go][role=button]')) { e.preventDefault(); e.target.click(); }
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-go][role=button],[data-gol][role=button]')) { e.preventDefault(); e.target.click(); }
 });
 document.addEventListener('input', e => {
   if (e.target.id !== 'q') return;
