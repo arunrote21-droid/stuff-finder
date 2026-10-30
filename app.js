@@ -575,9 +575,9 @@ function pathHtml(n) {
   if (!a.length) return `<div class="path"><span>${ic('home')} อยู่ชั้นนอกสุด</span></div>`;
   return `<div class="path">${a.map(x => `<span class="p" data-go="${x.id}"><img class="dot" src="${thumbUrl(x)}" alt="">${esc(label(x))}</span>`).join(ic('right'))}</div>`;
 }
-function rowHtml(n, terms = []) {
-  return `<div class="row" data-go="${n.id}" role="button" tabindex="0"><img class="thumb" src="${thumbUrl(n)}" alt="" loading="lazy">
-    <div class="mid"><div class="nm">${hl(label(n), terms)}</div><div class="meta">${badgesHtml(n)}</div>${pathHtml(n)}</div></div>`;
+function rowHtml(n, terms = [], attr = 'data-go') {
+  return `<div class="row" ${attr}="${n.id}" role="button" tabindex="0"><img class="thumb" src="${thumbUrl(n)}" alt="" loading="lazy">
+    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${hl(label(n), terms)}</div><div class="meta">${badgesHtml(n)}</div>${pathHtml(n)}</div></div>`;
 }
 function hl(text, terms) {
   if (!terms.length) return esc(text);
@@ -683,34 +683,30 @@ function smallRow(n) {
 const LISTTAB = 'stuff-finder:listtab';
 S.listTab = (() => { try { return localStorage.getItem(LISTTAB) === 'box' ? 'box' : 'item'; } catch { return 'item'; } })();
 S.listQ = '';
-function listResults() {
+function listMatches(type) {
   const terms = S.listQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
-  const hit = n => hasAllTags(n) && terms.every(t => (n.name || '').toLowerCase().includes(t));
   const rank = n => terms.reduce((a, t) => a + ((n.name || '').toLowerCase().startsWith(t) ? 2 : 1), 0);
-  const byFav = (a, b) => rank(b) - rank(a) || (b.fav ? 1 : 0) - (a.fav ? 1 : 0);
-  if (S.listTab === 'item') {
-    const items = [...S.nodes.values()].filter(n => n.type === 'item' && hit(n))
-      .sort((a, b) => byFav(a, b) || (a.name || '').localeCompare(b.name || '', 'th'));
-    if (!items.length) return `<div class="empty"><div class="big">${ic(terms.length ? 'search' : 'tag')}</div><h3>${terms.length ? 'ไม่พบของที่ค้นหา' : 'ยังไม่มีของ'}</h3><p>${terms.length ? 'ลองใช้คำสั้นลง' : 'ไปหน้าแรกกด “เพิ่ม” เพื่อถ่ายรูปของชิ้นแรก'}</p></div>`;
-    return `<div class="list">${items.map(x => miniItem(x, true, terms)).join('')}</div>`;
-  }
-  const boxes = [...S.nodes.values()].filter(n => n.type === 'box' && hit(n))
-    .sort((a, b) => byFav(a, b) || pathStr(a).localeCompare(pathStr(b), 'th'));
-  if (!boxes.length) return `<div class="empty"><div class="big">${ic(terms.length ? 'search' : 'box')}</div><h3>${terms.length ? 'ไม่พบที่เก็บที่ค้นหา' : 'ยังไม่มีตู้ กล่อง หรือถุง'}</h3><p>${terms.length ? 'ลองใช้คำสั้นลง' : 'สร้างที่หน้าแรกก่อน แล้วกลับมาดูว่าข้างในมีอะไรบ้างที่นี่'}</p></div>`;
-  return `<p style="color:var(--muted);margin:0 2px 8px">แตะเพื่อดูของทั้งหมดข้างใน</p><div class="list">${boxes.map(b => {
-    const c = itemsUnder(b.id).length, a = alertCount(b.id), anc = ancestors(b.id).map(label).join(' › ');
-    return `<div class="lrow" data-gol="${b.id}" role="button" tabindex="0"><img class="lt" src="${thumbUrl(b)}" alt="" loading="lazy">
-      <div class="mid"><div class="nm">${b.fav ? '<span class="star">★</span> ' : ''}${hl(label(b), terms)}${b.kind && b.kind !== b.name && !(b.name || '').startsWith(b.kind) ? ` <small style="color:var(--muted);font-weight:400">${esc(b.kind)}</small>` : ''}</div>
-      <div class="sub" style="color:var(--muted);font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${anc ? 'อยู่ใน ' + esc(anc) : 'ชั้นนอกสุด'}</div>
-      <div class="meta"><span class="badge">${c} ชิ้น</span>${a ? `<span class="badge bad">${ic('alert')} ใกล้หมดอายุ ${a}</span>` : ''}</div></div>${ic('right')}</div>`;
-  }).join('')}</div>`;
+  const res = [...S.nodes.values()].filter(n => n.type === type && hasAllTags(n) && terms.every(t => (n.name || '').toLowerCase().includes(t)))
+    .sort((a, b) => rank(b) - rank(a) || (b.fav ? 1 : 0) - (a.fav ? 1 : 0) || (a.name || '').localeCompare(b.name || '', 'th'));
+  return { terms, res };
+}
+function listResults() {
+  const { terms, res } = listMatches(S.listTab);
+  const searching = terms.length > 0 || S.stags.size > 0;
+  const isItem = S.listTab === 'item';
+  if (!res.length) return `<div class="empty"><div class="big">${ic(searching ? 'search' : isItem ? 'tag' : 'box')}</div>
+    <h3>${searching ? `ไม่พบ${isItem ? 'ของ' : 'ที่เก็บ'}ที่ค้นหา` : isItem ? 'ยังไม่มีของ' : 'ยังไม่มีตู้ กล่อง หรือถุง'}</h3>
+    <p>${searching ? 'ลองใช้คำสั้นลง ค้นหาด้วยชื่อ หรือเอาแท็กที่เลือกออก ดูแท็บอีกฝั่งด้วย (ตัวเลขบนแท็บคือจำนวนที่ตรง)' : 'ไปหน้าแรกกด “เพิ่ม” เพื่อถ่ายรูปชิ้นแรก'}</p></div>`;
+  return `${isItem || searching ? '' : '<p style="color:var(--muted);margin:0 2px 8px">แตะเพื่อดูของทั้งหมดข้างใน</p>'}<div class="list">${res.map(n => rowHtml(n, terms, isItem ? 'data-go' : 'data-gol')).join('')}</div>`;
+}
+function listTabsHtml() {
+  const ni = listMatches('item').res.length, nb = listMatches('box').res.length;
+  return `<button data-act="ltab" data-tab="item" class="${S.listTab === 'item' ? 'on' : ''}">ของ <small>${ni}</small></button><button data-act="ltab" data-tab="box" class="${S.listTab === 'box' ? 'on' : ''}">ที่เก็บ <small>${nb}</small></button>`;
 }
 function pageList() {
-  const all = [...S.nodes.values()];
-  const ni = all.filter(n => n.type === 'item').length, nb = all.length - ni;
   return `<div class="top"><div class="brand"><div class="logo">${ic('list')}</div><h1>รายการ</h1></div>
-    <div class="tabs" style="margin-bottom:10px"><button data-act="ltab" data-tab="item" class="${S.listTab === 'item' ? 'on' : ''}">ของ <small>${ni}</small></button><button data-act="ltab" data-tab="box" class="${S.listTab === 'box' ? 'on' : ''}">ที่เก็บ <small>${nb}</small></button></div>
-    <div class="search">${ic('search')}<input id="lq" type="text" enterkeyhint="search" placeholder="${S.listTab === 'item' ? 'ค้นหาชื่อของ…' : 'ค้นหาชื่อตู้ กล่อง ถุง…'}" value="${esc(S.listQ)}" autocomplete="off" autocapitalize="off"></div></div>
+    <div class="tabs" id="ltabs" style="margin-bottom:10px">${listTabsHtml()}</div>
+    <div class="search">${ic('search')}<input id="lq" type="text" enterkeyhint="search" placeholder="${S.listTab === 'item' ? 'ค้นหาชื่อของ เช่น ไขควง, มันฝรั่ง…' : 'ค้นหาชื่อตู้ กล่อง ถุง…'}" value="${esc(S.listQ)}" autocomplete="off" autocapitalize="off"></div></div>
     <div id="lres">${listResults()}</div>`;
 }
 function pageListOf(id) {
@@ -735,34 +731,8 @@ function pageListOf(id) {
       : `<div class="empty"><div class="big">${ic('box')}</div><h3>ยังไม่มีของข้างใน</h3><p>แตะ “เปิดดูแบบรูป” แล้วกดเพิ่มของได้เลย</p></div>`}`;
 }
 
-// Typed text matches item names only; tags are picked with the tag chips under the search box.
+// Typed text matches names only; tags are picked with the tag chips under the search box.
 const hasAllTags = n => [...S.stags].every(t => (n.tags || []).includes(t));
-function runSearch(q) {
-  const terms = q.toLowerCase().split(/\s+/).filter(Boolean);
-  if (!terms.length && !S.stags.size) return { terms, res: [] };
-  const res = [];
-  for (const n of S.nodes.values()) {
-    if (!hasAllTags(n)) continue;
-    const nm = (n.name || '').toLowerCase();
-    if (!terms.every(t => nm.includes(t))) continue;
-    res.push({ n, score: terms.reduce((a, t) => a + (nm.startsWith(t) ? 2 : 1), 0) });
-  }
-  res.sort((a, b) => b.score - a.score || (b.n.fav ? 1 : 0) - (a.n.fav ? 1 : 0) || (a.n.name || '').localeCompare(b.n.name || '', 'th'));
-  return { terms, res: res.map(r => r.n) };
-}
-function searchResultsHtml(q) {
-  const { terms, res } = runSearch(q);
-  if (!terms.length && !S.stags.size) {
-    const recent = [...S.nodes.values()].sort((a, b) => b.updated - a.updated).slice(0, 8);
-    return recent.length ? `<div class="sec"><h2>เพิ่ม/แก้ไขล่าสุด</h2></div><div class="list">${recent.map(n => rowHtml(n)).join('')}</div>`
-      : `<div class="empty"><div class="big">${ic('search')}</div><h3>ยังไม่มีอะไรให้ค้นหา</h3><p>เพิ่มของชิ้นแรกที่หน้าแรกก่อนนะ</p></div>`;
-  }
-  if (!res.length) return `<div class="empty"><div class="big">${ic('search')}</div><h3>ไม่พบ${q.trim() ? ` “${esc(q)}”` : 'รายการที่ตรงกับแท็ก'}</h3><p>ค้นหาด้วยชื่อ ลองใช้คำสั้นลง หรือเอาแท็กที่เลือกออก</p></div>`;
-  return `<div class="sec"><h2>พบ ${res.length} รายการ</h2></div><div class="list">${res.map(n => rowHtml(n, terms)).join('')}</div>`;
-}
-function pageSearch(q) {
-  return `<div class="top">${searchBox(q)}</div><div id="results">${searchResultsHtml(q)}</div>`;
-}
 
 function pageExp() {
   const items = [...S.nodes.values()].filter(n => n.type === 'item');
@@ -794,7 +764,7 @@ function pageSettings() {
 function navHtml() {
   const r = S.route?.name, al = alertItems().length;
   const a = (href, on, icon, t, extra = '') => `<a href="${href}" class="${on ? 'on' : ''}">${ic(icon)}<span>${t}</span>${extra}</a>`;
-  return `<div class="in">${a('#/', r === 'home' || r === 'node', 'home', 'ที่เก็บ')}${a('#/l', r === 'list', 'list', 'รายการ')}${a('#/s', r === 'search', 'search', 'ค้นหา')}${a('#/exp', r === 'exp', 'clock', 'หมดอายุ', al ? `<span class="cnt">${al}</span>` : '')}${a('#/set', r === 'set', 'gear', 'ตั้งค่า')}</div>`;
+  return `<div class="in">${a('#/', r === 'home' || r === 'node', 'home', 'ที่เก็บ')}${a('#/l', r === 'list', 'list', 'รายการ')}${a('#/exp', r === 'exp', 'clock', 'หมดอายุ', al ? `<span class="cnt">${al}</span>` : '')}${a('#/set', r === 'set', 'gear', 'ตั้งค่า')}</div>`;
 }
 
 function selbarHtml() {
@@ -809,13 +779,14 @@ function selbarHtml() {
 
 let fullUrls = [];
 function render({ keep = false } = {}) {
-  S.route = route();
-  const r = S.route, y = window.scrollY;
+  let r = route();
+  if (r.name === 'search') { S.listTab = 'item'; S.listQ = r.q || ''; history.replaceState(null, '', '#/l'); r = route(); } // old search links
+  S.route = r;
+  const y = window.scrollY;
   document.title = 'ของอยู่ไหน — สมุดจดที่เก็บของ';
   let html = '';
   if (r.name === 'home') html = pageHome();
   else if (r.name === 'node') html = pageNode(r.id);
-  else if (r.name === 'search') html = pageSearch(r.q);
   else if (r.name === 'list') html = r.id ? pageListOf(r.id) : pageList();
   else if (r.name === 'exp') html = pageExp();
   else html = pageSettings();
@@ -829,7 +800,7 @@ function render({ keep = false } = {}) {
     const b = await DB.photo(img.dataset.full).catch(() => null);
     if (b && img.isConnected) { const u = URL.createObjectURL(b); fullUrls.push(u); img.src = u; }
   });
-  if (r.name === 'search' && S.focusQ) { const q = $('#q'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
+  if (r.name === 'list' && !r.id && S.focusQ) { const q = $('#lq'); q.focus(); q.setSelectionRange(q.value.length, q.value.length); }
   S.focusQ = false;
   paintTagBar(searchFocused() ? true : undefined);
   if (r.name === 'set') showUsage();
@@ -907,20 +878,19 @@ const A = {
     render({ keep: true });
   },
   ltab: d => {
-    S.listTab = d.tab === 'box' ? 'box' : 'item'; S.listQ = '';
+        S.listTab = d.tab === 'box' ? 'box' : 'item'; S.listQ = '';
     try { localStorage.setItem(LISTTAB, S.listTab); } catch { /* storage blocked */ }
     render();
   },
   stag: d => {
     S.stags.has(d.tag) ? S.stags.delete(d.tag) : S.stags.add(d.tag);
     const r = S.route.name;
-    if (r === 'search') $('#results').innerHTML = searchResultsHtml($('#q').value);
-    else if (r === 'list') $('#lres').innerHTML = listResults();
+    if (r === 'list' && !S.route.id) { $('#lres').innerHTML = listResults(); $('#ltabs').innerHTML = listTabsHtml(); }
     else { S.focusQ = true; S.keepTags = true; location.hash = '#/s/' + encodeURIComponent($('#q')?.value || ''); return; }
     paintTagBar(searchFocused() ? true : undefined);
   },
   tagf: d => { S.tagFilter = S.tagFilter === d.tag ? null : d.tag; render({ keep: true }); },
-  clearq: () => { S.focusQ = true; location.hash = '#/s'; },
+  clearq: () => { S.focusQ = true; location.hash = '#/l'; },
   selstart: () => { S.sel = new Set(); render({ keep: true }); },
   selcancel: () => { S.sel = null; render({ keep: true }); },
   selall: () => { const k = children(curParent()); S.sel = S.sel.size === k.length ? new Set() : new Set(k.map(x => x.id)); render({ keep: true }); },
@@ -981,16 +951,9 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('[data-go][role=button],[data-gol][role=button]')) { e.preventDefault(); e.target.click(); }
 });
 document.addEventListener('input', e => {
-  if (e.target.id === 'lq') { S.listQ = e.target.value; $('#lres').innerHTML = listResults(); return; }
+  if (e.target.id === 'lq') { S.listQ = e.target.value; $('#lres').innerHTML = listResults(); $('#ltabs').innerHTML = listTabsHtml(); return; }
   if (e.target.id !== 'q') return;
-  const v = e.target.value, enc = '#/s/' + encodeURIComponent(v);
-  if (S.route.name === 'search') {
-    history.replaceState(null, '', v ? enc : '#/s');
-    $('#results').innerHTML = searchResultsHtml(v);
-    const cl = $('.search .clear');
-    if (v && !cl) e.target.parentElement.insertAdjacentHTML('beforeend', `<button class="clear" data-act="clearq" aria-label="ล้างคำค้น">${ic('x')}</button>`);
-    if (!v && cl) cl.remove();
-  } else { S.focusQ = true; location.hash = enc; }
+  S.focusQ = true; location.hash = '#/s/' + encodeURIComponent(e.target.value); // continues on the list page
 });
 document.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'q') e.target.blur(); });
 
@@ -1001,7 +964,7 @@ const searchFocused = () => ['q', 'lq'].includes(document.activeElement?.id);
 function paintTagBar(show) {
   const host = $('.top'); if (!host) return;
   let bar = $('#tagbar');
-  const want = show ?? (S.stags.size > 0 && ['search', 'list'].includes(S.route?.name));
+  const want = show ?? (S.stags.size > 0 && S.route?.name === 'list');
   const count = new Map();
   S.nodes.forEach(n => (n.tags || []).forEach(t => count.set(t, (count.get(t) || 0) + 1)));
   const order = [...tagList, ...[...count.keys()].filter(t => !tagList.includes(t))].filter(t => count.has(t));
