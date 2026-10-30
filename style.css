@@ -225,3 +225,11 @@ mark{background:var(--warn-soft);color:inherit;border-radius:4px;padding:0 2px}
 .tag.warn{background:#d97706}
 .selmode .tag.tl{display:none}
 .search input{-webkit-appearance:none;appearance:none}
+
+/* keep long native inputs (iOS date) inside the sheet */
+.sheet{overflow-x:hidden}
+.two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.field input,.field textarea,.field select{min-width:0;max-width:100%;display:block}
+.field input[type=date]{-webkit-appearance:none;appearance:none;text-align:left}
+button.chip{border:0;cursor:pointer}
+.chip.on{background:var(--accent);color:var(--accent-ink)}

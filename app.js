@@ -209,6 +209,7 @@ function pickLocation({ title = 'เลือกที่เก็บ', exclude 
     let pick = current && S.nodes.has(current) ? current : null;
     const open = new Set(pick ? [...ancestors(pick).map(a => a.id), pick] : []);
     const s = sheet(`<h3>${esc(title)}</h3><div class="tree" id="tree"></div>
+      <button class="btn block" data-new style="margin-top:10px;border-style:dashed;color:var(--accent)">${ic('plus')}<span id="newLbl"></span></button>
       <div class="actions"><button class="btn primary" data-ok>${esc(confirm)}</button><button class="btn" data-cancel>ยกเลิก</button></div>`);
     const tree = $('#tree', s.el);
     const boxKids = id => children(id).filter(n => n.type === 'box' && !exclude.has(n.id));
@@ -222,6 +223,7 @@ function pickLocation({ title = 'เลือกที่เก็บ', exclude 
       const top = tree.scrollTop;
       tree.innerHTML = `<div class="tn root ${pick === null ? 'pick' : ''}" data-id=""><span class="tg"></span><span class="im" style="display:grid;place-items:center">${ic('home')}</span><span class="t">ชั้นนอกสุด</span></div>${rows(null, 0).join('')}`;
       tree.scrollTop = top;
+      $('#newLbl', s.el).textContent = `สร้างกล่อง / ถุง / ชั้น / ตู้ใหม่ ไว้ใน “${pick ? label(S.nodes.get(pick)) : 'ชั้นนอกสุด'}”`;
     };
     paint();
     tree.addEventListener('click', e => {
@@ -233,7 +235,11 @@ function pickLocation({ title = 'เลือกที่เก็บ', exclude 
     let done = false;
     const fin = v => { if (done) return; done = true; s.close(); res(v); };
     s.el.addEventListener('click', e => {
-      if (e.target.closest('[data-ok]')) fin({ id: pick });
+      if (e.target.closest('[data-new]')) {
+        openForm({ type: 'box', lockType: true, noAgain: true, parent: pick, title: 'สร้างที่เก็บใหม่', onSaved: n => {
+          pick = n.id; ancestors(n.id).forEach(a => open.add(a.id)); paint();
+        } });
+      } else if (e.target.closest('[data-ok]')) fin({ id: pick });
       else if (e.target.closest('[data-cancel]')) fin(undefined);
     });
     s.scrim.onclose = () => fin(undefined);
@@ -307,15 +313,19 @@ function openForm(opts = {}) {
     type: ex ? ex.type : (opts.type || 'item'),
     parent: ex ? ex.parent : (opts.parent || null),
     photo: ex ? { url: thumbUrl(ex), isNew: false } : null,
+    kind: ex?.kind || '', autoName: '',
   };
   const lock = !!ex || opts.lockType;
   const exclude = ex ? new Set([ex.id, ...descendants(ex.id).map(x => x.id)]) : new Set();
+  const kinds = ['ตู้', 'ชั้น', 'ลิ้นชัก', 'กล่อง', 'ถุง', 'ซอง', 'ตู้เย็น', 'โฟลเดอร์'];
   const units = ['ชิ้น', 'อัน', 'หัว', 'ถุง', 'กล่อง', 'ขวด', 'แพ็ค', 'กก.', 'กรัม', 'ลิตร', 'ฟอง'];
   const s = sheet(`<form id="f" novalidate>
-    <h3>${ex ? 'แก้ไข' : 'เพิ่มใหม่'}</h3>
+    <h3>${esc(opts.title || (ex ? 'แก้ไข' : 'เพิ่มใหม่'))}</h3>
     ${lock ? '' : `<div class="tabs"><button type="button" data-t="item">${ic('tag')} ของ</button><button type="button" data-t="box">${ic('box')} กล่อง / ที่เก็บ</button></div>`}
     <div class="field"><div class="drop" id="drop"></div><div class="hint" id="photoHint">ต้องมีรูปถ่ายเสมอ — รูปนี้คือสิ่งที่จะเห็นตอนค้นหา</div></div>
     <div class="field"><label for="fn" id="nl"></label><input id="fn" maxlength="120" autocomplete="off" value="${esc(ex?.name || '')}"></div>
+    <div class="field hidden" id="kindRow"><label>เป็นอะไร <span style="color:var(--muted);font-weight:400">(แตะเลือก ระบบจะตั้งชื่อ + เลขให้ เช่น กล่อง 2)</span></label>
+      <div class="actions" style="margin-top:0;gap:6px">${kinds.map(k => `<button type="button" class="chip" data-kind="${k}">${k}</button>`).join('')}</div></div>
     <div id="itemOnly">
       <div class="two">
         <div class="field"><label for="fq">จำนวน</label><input id="fq" type="number" inputmode="decimal" min="0" step="any" value="${ex ? ex.qty : 1}"></div>
@@ -328,11 +338,11 @@ function openForm(opts = {}) {
     </div>
     <div class="field"><label for="ft">แท็ก <span style="color:var(--muted);font-weight:400">(คั่นด้วยเครื่องหมายจุลภาค)</span></label><input id="ft" placeholder="เช่น เครื่องมือ, ซ่อมบ้าน" value="${esc((ex?.tags || []).join(', '))}"></div>
     <div class="field"><label for="fo">บันทึกเพิ่มเติม</label><textarea id="fo" placeholder="ยี่ห้อ ขนาด รายละเอียดที่อยากจำ">${esc(ex?.note || '')}</textarea></div>
-    <div class="field"><label>เก็บไว้ที่</label>
+    <div class="field"><label>เก็บไว้ที่ <span style="color:var(--muted);font-weight:400">(แตะเพื่อเลือก หรือสร้างกล่อง/ชั้นใหม่พร้อมถ่ายรูป)</span></label>
       <button type="button" class="btn block" id="loc" style="height:auto;min-height:46px;padding:8px 16px;justify-content:space-between;text-align:left"><span id="locT"></span>${ic('right')}</button></div>
     <div class="actions" style="margin-top:6px">
       <button class="btn primary" style="flex:1" id="save">${ic('check')} บันทึก</button>
-      ${ex ? '' : `<button type="button" class="btn" id="again">บันทึกและเพิ่มต่อ</button>`}
+      ${ex || opts.noAgain ? '' : `<button type="button" class="btn" id="again">บันทึกและเพิ่มต่อ</button>`}
       <button type="button" class="btn" data-cancel>ยกเลิก</button>
     </div></form>`);
   const $f = sel => $(sel, s.el);
@@ -348,6 +358,8 @@ function openForm(opts = {}) {
   const paintType = () => {
     $$('.tabs button', s.el).forEach(b => b.classList.toggle('on', b.dataset.t === d.type));
     $f('#itemOnly').classList.toggle('hidden', d.type !== 'item');
+    $f('#kindRow').classList.toggle('hidden', d.type !== 'box');
+    $$('[data-kind]', s.el).forEach(b => b.classList.toggle('on', b.dataset.kind === d.kind));
     $f('#nl').innerHTML = d.type === 'item' ? 'ชื่อของ <em>*</em>' : 'ชื่อ <span style="color:var(--muted);font-weight:400">(ไม่ใส่ก็ได้ ถ้ามีรูปแล้ว)</span>';
     $f('#fn').placeholder = d.type === 'item' ? 'เช่น ไขควงปากแฉก, มันฝรั่ง' : 'เช่น กล่องเครื่องมือ, ตู้เย็น ชั้น 2';
     if (!d.photo) paintDrop();
@@ -370,6 +382,19 @@ function openForm(opts = {}) {
         dr.classList.remove('err');
       } catch { toast('อ่านรูปนี้ไม่ได้ ลองรูปอื่นนะ'); }
       paintDrop();
+      return;
+    }
+    const kb = e.target.closest('[data-kind]');
+    if (kb) {
+      const k = kb.dataset.kind, nm = $f('#fn');
+      const wasAuto = !nm.value.trim() || nm.value === d.autoName;
+      d.kind = d.kind === k ? '' : k;
+      if (wasAuto) {
+        const c = [...S.nodes.values()].filter(x => x.kind === k && x.id !== ex?.id).length;
+        d.autoName = d.kind ? `${k} ${c + 1}` : '';
+        nm.value = d.autoName;
+      }
+      paintType();
       return;
     }
     const a = e.target.closest('[data-add]');
@@ -395,7 +420,7 @@ function openForm(opts = {}) {
     const now = Date.now();
     const n = ex ? { ...ex } : { id: uid(), created: now };
     Object.assign(n, {
-      type: d.type, parent: d.parent || null, name, updated: now,
+      type: d.type, parent: d.parent || null, name, updated: now, kind: d.type === 'box' ? d.kind : '',
       note: $f('#fo').value.trim(),
       tags: [...new Set($f('#ft').value.split(/[,，\n]+/).map(t => t.trim().replace(/^#/, '')).filter(Boolean))],
       qty: d.type === 'item' ? Math.max(0, num($f('#fq').value)) : 0,
@@ -445,7 +470,7 @@ function cardHtml(n) {
   let tags = '', sub = '';
   if (n.type === 'box') {
     const k = children(n.id);
-    tags += `<span class="tag tl box">${ic('box')} ${itemsUnder(n.id).length} ชิ้น</span>`;
+    tags += `<span class="tag tl box">${ic('box')} ${n.kind ? esc(n.kind) + ' · ' : ''}${itemsUnder(n.id).length} ชิ้น</span>`;
     const a = alertCount(n.id);
     if (a) tags += `<span class="tag tr bad">${ic('alert')} ${a}</span>`;
     sub = k.length ? k.slice(0, 3).map(label).join(', ') + (k.length > 3 ? ` +${k.length - 3}` : '') : 'ยังว่างอยู่';
