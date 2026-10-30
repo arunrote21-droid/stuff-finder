@@ -570,14 +570,15 @@ function cardHtml(n) {
     <div class="body"><div class="nm ${n.name ? '' : 'none'}">${n.fav ? '<span class="star">★</span> ' : ''}${esc(n.name || 'ไม่มีชื่อ')}</div><div class="sub">${esc(sub)}</div></div></div>`;
 }
 
+// where something lives: a strip of photo chips, outermost first; the innermost (where it really sits) is outlined
 function pathHtml(n) {
   const a = ancestors(n.id);
-  if (!a.length) return `<div class="path"><span>${ic('home')} อยู่ชั้นนอกสุด</span></div>`;
-  return `<div class="path">${a.map(x => `<span class="p" data-go="${x.id}"><img class="dot" src="${thumbUrl(x)}" alt="">${esc(label(x))}</span>`).join(ic('right'))}</div>`;
+  if (!a.length) return `<div class="strip"><b>อยู่ใน</b><span class="muted">${ic('home')} ชั้นนอกสุด</span></div>`;
+  return `<div class="strip"><b>อยู่ใน</b>${a.map((x, i) => `<span class="p ${i === a.length - 1 ? 'in' : ''}" data-go="${x.id}"><img src="${thumbUrl(x)}" alt=""><span>${esc(label(x))}</span></span>`).join(`<span class="sepi">${ic('right')}</span>`)}</div>`;
 }
 function rowHtml(n, terms = [], attr = 'data-go') {
   return `<div class="row" ${attr}="${n.id}" role="button" tabindex="0"><img class="thumb" src="${thumbUrl(n)}" alt="" loading="lazy">
-    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${hl(label(n), terms)}</div><div class="meta">${badgesHtml(n)}</div>${pathHtml(n)}</div></div>`;
+    <div class="mid"><div class="nm">${n.fav ? '<span class="star">★</span> ' : ''}${hl(label(n), terms)}</div><div class="meta">${badgesHtml(n)}</div></div>${pathHtml(n)}</div>`;
 }
 function hl(text, terms) {
   if (!terms.length) return esc(text);

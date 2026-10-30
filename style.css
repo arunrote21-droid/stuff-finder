@@ -295,3 +295,14 @@ button.chip{border:0;cursor:pointer}
 .fab{box-shadow:0 8px 24px color-mix(in srgb,var(--accent) 40%,transparent)}
 .tabs button.on{background:var(--accent);color:var(--accent-ink);box-shadow:none}
 .tabs button.on small{opacity:.8}
+
+/* location strip under a result row */
+.row{flex-wrap:wrap}
+.row .strip{flex-basis:100%;display:flex;flex-wrap:wrap;align-items:center;gap:6px;border-top:1px solid var(--line);padding-top:8px;margin-top:2px}
+.strip b{font-size:.75rem;color:var(--muted);font-weight:500;flex:none}
+.strip .muted{font-size:.85rem;color:var(--muted)}
+.strip .p{display:flex;align-items:center;gap:6px;background:var(--surface2);border-radius:12px;padding:3px 10px 3px 3px;font-size:.82rem;font-weight:500;max-width:100%;cursor:pointer}
+.strip .p img{width:36px;height:36px;border-radius:9px;object-fit:cover;flex:none}
+.strip .p span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.strip .p.in{outline:2px solid var(--accent)}
+.strip .sepi{color:var(--muted);display:inline-flex}
