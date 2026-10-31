@@ -306,3 +306,10 @@ button.chip{border:0;cursor:pointer}
 .strip .p span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .strip .p.in{outline:2px solid var(--accent)}
 .strip .sepi{color:var(--muted);display:inline-flex}
+
+/* drawn stand-in pictures */
+.artnote{position:absolute;top:10px;left:10px;z-index:1;background:rgba(20,23,29,.72);color:#fff;font-size:.78rem;font-weight:500;padding:2px 10px;border-radius:99px}
+.artgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;max-height:46dvh;overflow:auto;padding:2px 2px 8px;margin-bottom:10px}
+.artitem{display:flex;flex-direction:column;align-items:center;gap:4px;font-size:.72rem;line-height:1.15;color:var(--ink);text-align:center}
+.artitem svg{width:100%;aspect-ratio:1;border-radius:16px;box-shadow:var(--shadow)}
+.artitem:active{transform:scale(.95)}

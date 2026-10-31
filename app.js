@@ -295,6 +295,7 @@ const fresh = async b => (b ? new Blob([await b.arrayBuffer()], { type: b.type }
 async function rebuildThumb(id) {
   const photo = await DB.photo(id);
   if (!photo) return null;
+  if ((photo.type || '').includes('svg')) return photo; // drawn pictures are already tiny
   const { thumb } = await processImage(photo, true);
   return thumb;
 }
@@ -347,13 +348,51 @@ async function deleteNode(id) {
   return true;
 }
 
+/* ───────────── drawn stand-in pictures (no photo needed) ───────────── */
+const svgBlob = svg => new Blob([svg], { type: 'image/svg+xml' });
+function letterSvg(name) {
+  const ch = Array.from((name || '?').trim())[0] || '?';
+  const h = [...(name || '?')].reduce((a, c) => (a * 31 + c.charCodeAt(0)) | 0, 7), hue = Math.abs(h) % 360;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><linearGradient id="l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="hsl(${hue},55%,62%)"/><stop offset="1" stop-color="hsl(${hue},55%,42%)"/></linearGradient></defs><rect width="100" height="100" fill="url(#l)"/><text x="50" y="68" font-size="56" font-weight="700" text-anchor="middle" fill="#fff" font-family="Kanit,Sarabun,sans-serif">${esc(ch)}</text></svg>`;
+}
+// choose an icon by hand: search + category tabs
+function pickArt({ query = '', type = 'item' } = {}) {
+  return new Promise(res => {
+    const C = window.ARTCAT; if (!C) return res(undefined);
+    const cats = Object.keys(C.CATS), norm = t => String(t || '').toLowerCase().replace(/[\s_\-.,()/]+/g, '');
+    let cat = type === 'box' ? 'place' : (C.match(query)?.cat || 'meat');
+    const s = sheet(`<h3>เลือกภาพวาด</h3>
+      <div class="search" style="margin-bottom:10px">${ic('search')}<input id="aq" type="text" placeholder="ค้นหาชื่อภาพ เช่น ไก่ ซอส ตู้" value="${esc(query)}" autocomplete="off"></div>
+      <div class="tagbar" id="acats" style="padding-top:0"></div>
+      <div class="artgrid" id="agrid"></div>
+      <div class="actions"><button class="btn" data-cancel>ยกเลิก</button></div>`);
+    const paint = () => {
+      const q = norm($('#aq', s.el).value);
+      const list = q ? C.list.filter(e => e.k.some(k => norm(k).includes(q))).slice(0, 120) : C.list.filter(e => e.cat === cat);
+      $('#acats', s.el).innerHTML = cats.map(k => `<button type="button" class="chip ${!q && k === cat ? 'on' : ''}" data-c="${k}">${esc(C.CATS[k].name)}</button>`).join('');
+      $('#agrid', s.el).innerHTML = list.length ? list.map(e => `<button type="button" class="artitem" data-id="${e.id}">${C.render(e)}<span>${esc(e.n)}</span></button>`).join('')
+        : '<p style="grid-column:1/-1;text-align:center;color:var(--muted)">ไม่พบภาพที่ตรงกับคำนี้ ลองคำสั้นลง หรือเลือกจากหมวดด้านบน</p>';
+    };
+    paint();
+    let done = false;
+    const fin = v => { if (done) return; done = true; s.close(); res(v); };
+    $('#aq', s.el).addEventListener('input', paint);
+    s.el.addEventListener('click', e => {
+      const c = e.target.closest('[data-c]'); if (c) { cat = c.dataset.c; $('#aq', s.el).value = ''; paint(); return; }
+      const it = e.target.closest('[data-id]'); if (it) return fin(C.byId(it.dataset.id));
+      if (e.target.closest('[data-cancel]')) fin(undefined);
+    });
+    s.scrim.onclose = () => fin(undefined);
+  });
+}
+
 /* ───────────── add / edit form ───────────── */
 function openForm(opts = {}) {
   const ex = opts.id ? S.nodes.get(opts.id) : null;
   const d = {
     type: ex ? ex.type : (opts.type || 'item'),
     parent: ex ? ex.parent : (opts.parent || null),
-    photo: ex ? { url: thumbUrl(ex), isNew: false } : null,
+    photo: ex ? { url: thumbUrl(ex), isNew: false, art: !!ex.art } : null,
     kind: ex?.kind || '', autoName: '',
     tags: [...(ex?.tags || [])], manage: false, pendingDel: null,
   };
@@ -364,7 +403,7 @@ function openForm(opts = {}) {
   const s = sheet(`<form id="f" novalidate>
     <h3>${esc(opts.title || (ex ? 'แก้ไข' : 'เพิ่มใหม่'))}</h3>
     ${lock ? '' : `<div class="tabs"><button type="button" data-t="item">${ic('tag')} ของ</button><button type="button" data-t="box">${ic('box')} กล่อง / ที่เก็บ</button></div>`}
-    <div class="field"><div class="drop" id="drop"></div><div class="hint" id="photoHint">ต้องมีรูปถ่ายเสมอ — รูปนี้คือสิ่งที่จะเห็นตอนค้นหา</div></div>
+    <div class="field"><div class="drop" id="drop"></div><div class="hint" id="photoHint">ไม่ต้องถ่ายก็ได้ — พิมพ์ชื่อแล้วระบบวาดภาพให้ตามชื่อ ถ่ายรูปจริงทีหลังได้</div></div>
     <div class="field"><label for="fn" id="nl"></label><input id="fn" maxlength="120" autocomplete="off" value="${esc(ex?.name || '')}"></div>
     <div class="field hidden" id="kindRow"><label>เป็นอะไร <span style="color:var(--muted);font-weight:400">(แตะเลือก ระบบจะตั้งชื่อ + เลขให้ เช่น กล่อง 2)</span></label>
       <div class="actions" style="margin-top:0;gap:6px">${kinds.map(k => `<button type="button" class="chip" data-kind="${k}">${k}</button>`).join('')}</div></div>
@@ -393,18 +432,39 @@ function openForm(opts = {}) {
   const paintDrop = () => {
     const dr = $f('#drop');
     dr.classList.toggle('has', !!d.photo);
-    dr.innerHTML = d.photo
-      ? `<img class="pv" src="${d.photo.url}" alt=""><div class="row2"><button type="button" class="btn" data-p="cam">${ic('camera')} ถ่ายใหม่</button><button type="button" class="btn" data-p="gal">${ic('image')} เลือกรูปอื่น</button></div>`
-      : `<div style="color:var(--accent)">${ic(d.type === 'box' ? 'box' : 'camera').replace('class="i ', 'class="i " style="width:48px;height:48px" data-x="')}</div>
-         <p>${d.type === 'box' ? 'ถ่ายรูปกล่อง ถุง ตู้ หรือชั้นที่ใช้เก็บของ' : 'ถ่ายรูปของชิ้นนี้ให้เห็นชัดๆ'}</p>
-         <div class="row2"><button type="button" class="btn primary" data-p="cam">${ic('camera')} ถ่ายรูป</button><button type="button" class="btn" data-p="gal">${ic('image')} เลือกจากคลังรูป</button></div>`;
+    if (d.photo) {
+      const art = d.photo.art;
+      dr.innerHTML = `<img class="pv" src="${d.photo.url}" alt="">${art ? `<span class="artnote">ภาพวาด${d.photo.label ? ' · ' + esc(d.photo.label) : ''}</span>` : ''}
+        <div class="row2"><button type="button" class="btn" data-p="cam">${ic('camera')} ${art ? 'ถ่ายรูปจริงแทน' : 'ถ่ายใหม่'}</button><button type="button" class="btn" data-p="gal">${ic('image')} เลือกรูปอื่น</button><button type="button" class="btn" data-art>${ic('star')} ${art ? 'เลือกไอคอนอื่น' : 'ใช้ภาพวาดแทน'}</button></div>`;
+    } else {
+      dr.innerHTML = `<div style="color:var(--accent)">${ic(d.type === 'box' ? 'box' : 'camera').replace('class="i ', 'class="i " style="width:48px;height:48px" data-x="')}</div>
+         <p>${d.type === 'box' ? 'ถ่ายรูปกล่อง ถุง ตู้ หรือชั้นที่ใช้เก็บของ' : 'ถ่ายรูปของชิ้นนี้ให้เห็นชัดๆ'}<br><span style="font-size:.85rem">หรือพิมพ์ชื่อด้านล่าง ระบบจะวาดภาพให้</span></p>
+         <div class="row2"><button type="button" class="btn primary" data-p="cam">${ic('camera')} ถ่ายรูป</button><button type="button" class="btn" data-p="gal">${ic('image')} เลือกจากคลังรูป</button><button type="button" class="btn" data-art>${ic('star')} เลือกภาพวาด</button></div>`;
+    }
+  };
+  // drawn picture chosen by us (from the typed name) or by the user (from the icon list)
+  const setArt = (entry, auto) => {
+    const svg = entry.id === 'letter' ? letterSvg(entry.name) : window.ARTCAT.render(entry);
+    const blob = svgBlob(svg);
+    if (d.photo?.isNew) URL.revokeObjectURL(d.photo.url);
+    d.photo = { art: true, artId: entry.id, auto, label: entry.id === 'letter' ? '' : entry.n, isNew: true, full: blob, thumb: blob, url: URL.createObjectURL(blob) };
+  };
+  const suggest = () => {
+    if (!window.ARTCAT || (d.photo && !(d.photo.art && d.photo.auto && d.photo.isNew))) return false; // a real photo or a hand-picked icon stays
+    const name = $f('#fn').value.trim();
+    const entry = (name && window.ARTCAT.match(name)) || (d.type === 'box' && !name && d.kind ? window.ARTCAT.match(d.kind) : null);
+    if (entry) setArt(entry, true);
+    else if (name) setArt({ id: 'letter', name }, true);
+    else if (d.photo) { URL.revokeObjectURL(d.photo.url); d.photo = null; }
+    paintDrop();
+    return true;
   };
   const paintType = () => {
     $$('.tabs button', s.el).forEach(b => b.classList.toggle('on', b.dataset.t === d.type));
     $f('#itemOnly').classList.toggle('hidden', d.type !== 'item');
     $f('#kindRow').classList.toggle('hidden', d.type !== 'box');
     $$('[data-kind]', s.el).forEach(b => b.classList.toggle('on', b.dataset.kind === d.kind));
-    $f('#nl').innerHTML = d.type === 'item' ? 'ชื่อของ <em>*</em>' : 'ชื่อ <span style="color:var(--muted);font-weight:400">(ไม่ใส่ก็ได้ ถ้ามีรูปแล้ว)</span>';
+    $f('#nl').innerHTML = d.type === 'item' ? 'ชื่อของ <em>*</em>' : 'ชื่อ <span style="color:var(--muted);font-weight:400">(ไม่ใส่ก็ได้)</span>';
     $f('#fn').placeholder = d.type === 'item' ? 'เช่น ไขควงปากแฉก, มันฝรั่ง' : 'เช่น กล่องเครื่องมือ, ตู้เย็น ชั้น 2';
     if (!d.photo) paintDrop();
   };
@@ -429,11 +489,17 @@ function openForm(opts = {}) {
     inp.value = ''; paintTags();
   };
   $f('#ftNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
+  let sgT; $f('#fn').addEventListener('input', () => { clearTimeout(sgT); sgT = setTimeout(suggest, 180); });
   paintDrop(); paintType(); paintLoc(); paintTags();
 
   s.el.addEventListener('click', async e => {
     const t = e.target.closest('[data-t]');
-    if (t) { d.type = t.dataset.t; paintType(); return; }
+    if (t) { d.type = t.dataset.t; paintType(); suggest(); return; }
+    if (e.target.closest('[data-art]')) {
+      const en = await pickArt({ query: $f('#fn').value, type: d.type });
+      if (en) { setArt(en, false); paintDrop(); }
+      return;
+    }
     const p = e.target.closest('[data-p]');
     if (p) {
       const f = await choosePhoto(p.dataset.p === 'cam');
@@ -470,7 +536,7 @@ function openForm(opts = {}) {
         d.autoName = d.kind ? `${k} ${c + 1}` : '';
         nm.value = d.autoName;
       }
-      paintType();
+      paintType(); suggest();
       return;
     }
     const a = e.target.closest('[data-add]');
@@ -491,8 +557,12 @@ function openForm(opts = {}) {
 
   const save = async again => {
     const name = $f('#fn').value.trim();
-    if (!d.photo) { $f('#drop').classList.add('err'); $f('#drop').scrollIntoView({ block: 'center', behavior: 'smooth' }); toast('ต้องมีรูปถ่ายก่อนนะ'); return; }
     if (d.type === 'item' && !name) { $f('#fn').focus(); toast('ใส่ชื่อของด้วยนะ'); return; }
+    if (!d.photo) { // nothing chosen: draw a picture from the name (or the kind / a plain box)
+      const C = window.ARTCAT;
+      const entry = C && ((name && C.match(name)) || (d.kind && C.match(d.kind)) || (d.type === 'box' ? C.match('กล่อง') : null));
+      if (entry) setArt(entry, true); else setArt({ id: 'letter', name: name || '?' }, true);
+    }
     const now = Date.now();
     const n = ex ? { ...ex } : { id: uid(), created: now };
     Object.assign(n, {
@@ -503,7 +573,7 @@ function openForm(opts = {}) {
       unit: d.type === 'item' ? $f('#fu').value.trim() : '',
       expiry: d.type === 'item' ? ($f('#fe').value || '') : '',
     });
-    if (d.photo.isNew) n.thumb = d.photo.thumb;
+    if (d.photo.isNew) { n.thumb = d.photo.thumb; if (d.photo.art) n.art = d.photo.artId; else delete n.art; }
     $f('#save').disabled = true;
     try {
       await commit({ put: [n], photos: d.photo.isNew ? [[n.id, d.photo.full]] : [], thumbs: d.photo.isNew ? [[n.id, d.photo.thumb]] : [] });
