@@ -349,6 +349,16 @@ async function deleteNode(id) {
 }
 
 /* ───────────── drawn stand-in pictures (no photo needed) ───────────── */
+const BUILD = '2026-11-01-a';
+// if a stale page came without the picture library, fetch it now (cache-busted) instead of failing silently
+let artLoading = null;
+function ensureArt() {
+  if (window.ARTCAT) return Promise.resolve(true);
+  if (artLoading) return artLoading;
+  const load = src => new Promise(ok => { const el = document.createElement('script'); el.src = `${src}?v=${BUILD}`; el.onload = () => ok(true); el.onerror = () => ok(false); document.head.append(el); });
+  artLoading = (async () => { if (!window.ART && !(await load('art-icons.js'))) return false; if (!(await load('art-catalog.js'))) return false; return !!window.ARTCAT; })().finally(() => { artLoading = null; });
+  return artLoading;
+}
 const svgBlob = svg => new Blob([svg], { type: 'image/svg+xml' });
 function letterSvg(name) {
   const ch = Array.from((name || '?').trim())[0] || '?';
@@ -358,7 +368,7 @@ function letterSvg(name) {
 // choose an icon by hand: search + category tabs
 function pickArt({ query = '', type = 'item' } = {}) {
   return new Promise(res => {
-    const C = window.ARTCAT; if (!C) return res(undefined);
+    const C = window.ARTCAT; if (!C) { toast('ยังโหลดชุดภาพวาดไม่ได้ ลองกดปุ่มรีเฟรชมุมซ้ายล่างแล้วลองใหม่'); return res(undefined); }
     const cats = Object.keys(C.CATS), norm = t => String(t || '').toLowerCase().replace(/[\s_\-.,()/]+/g, '');
     let cat = type === 'box' ? 'place' : (C.match(query)?.cat || 'meat');
     const s = sheet(`<h3>เลือกภาพวาด</h3>
@@ -489,6 +499,7 @@ function openForm(opts = {}) {
     inp.value = ''; paintTags();
   };
   $f('#ftNew').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); addTag(); } });
+  ensureArt().then(ok => { if (ok) suggest(); else toast('ยังโหลดชุดภาพวาดไม่ได้ กดปุ่มรีเฟรชมุมซ้ายล่างแล้วลองใหม่'); });
   let sgT; $f('#fn').addEventListener('input', () => { clearTimeout(sgT); sgT = setTimeout(suggest, 180); });
   paintDrop(); paintType(); paintLoc(); paintTags();
 
@@ -496,6 +507,7 @@ function openForm(opts = {}) {
     const t = e.target.closest('[data-t]');
     if (t) { d.type = t.dataset.t; paintType(); suggest(); return; }
     if (e.target.closest('[data-art]')) {
+      await ensureArt();
       const en = await pickArt({ query: $f('#fn').value, type: d.type });
       if (en) { setArt(en, false); paintDrop(); }
       return;
@@ -559,6 +571,7 @@ function openForm(opts = {}) {
     const name = $f('#fn').value.trim();
     if (d.type === 'item' && !name) { $f('#fn').focus(); toast('ใส่ชื่อของด้วยนะ'); return; }
     if (!d.photo) { // nothing chosen: draw a picture from the name (or the kind / a plain box)
+      await ensureArt();
       const C = window.ARTCAT;
       const entry = C && ((name && C.match(name)) || (d.kind && C.match(d.kind)) || (d.type === 'box' ? C.match('กล่อง') : null));
       if (entry) setArt(entry, true); else setArt({ id: 'letter', name: name || '?' }, true);
@@ -837,6 +850,7 @@ function pageSettings() {
       <div class="card2"><h3>พื้นที่ที่ใช้</h3><p id="usage">กำลังคำนวณ…</p></div>
       <div class="card2"><h3>สำรองข้อมูล</h3><p>ข้อมูลและรูปทั้งหมดเก็บอยู่ในเครื่องนี้เท่านั้น (ไม่ได้อัปโหลดที่ไหน) ควรสำรองเป็นไฟล์เก็บไว้เป็นระยะ เผลอล้างข้อมูลเบราว์เซอร์จะได้ไม่หาย</p>
         <div class="actions" style="margin-top:0"><button class="btn primary" data-act="export" id="bExp">${ic('download')} ดาวน์โหลดไฟล์สำรอง</button><button class="btn" data-act="import">${ic('upload')} นำเข้าจากไฟล์สำรอง</button></div></div>
+      <div class="card2"><h3>เวอร์ชัน</h3><p id="ver">${BUILD} · ภาพวาด: ${window.ARTCAT ? window.ARTCAT.list.length + ' รายการพร้อมใช้' : 'ยังโหลดไม่ได้ (กดรีเฟรชมุมซ้ายล่าง)'}</p></div>
       <div class="card2"><h3>ใช้บนมือถือ</h3><p>เปิดหน้านี้ในเบราว์เซอร์มือถือ แล้วเลือก “เพิ่มไปยังหน้าจอหลัก” จะใช้งานเหมือนแอป และเปิดได้แม้ไม่มีอินเทอร์เน็ต</p></div>
       <div class="card2"><h3>ล้างข้อมูลทั้งหมด</h3><p>ลบของ กล่อง และรูปทั้งหมดในเครื่องนี้ กู้คืนไม่ได้ถ้าไม่มีไฟล์สำรอง</p><button class="btn danger" data-act="wipe">${ic('trash')} ลบทุกอย่าง</button></div>
     </div>`;
@@ -1061,6 +1075,23 @@ function paintTagBar(show) {
 document.addEventListener('focusin', e => { if (['q', 'lq'].includes(e.target.id)) paintTagBar(true); });
 document.addEventListener('focusout', () => setTimeout(() => paintTagBar(searchFocused() ? true : undefined), 150));
 
+/* placeholders (letter tiles) made while the picture library was missing: redraw them when the name now matches */
+async function upgradePlaceholders() {
+  if (!(await ensureArt())) return;
+  const C = window.ARTCAT, fix = [], thumbs = [], photos = [];
+  for (const n of S.nodes.values()) {
+    if (n.art !== 'letter') continue;
+    const e = C.match(n.name || '') || (n.type === 'box' && n.kind ? C.match(n.kind) : null);
+    if (!e) continue;
+    const blob = svgBlob(C.render(e));
+    fix.push({ ...n, art: e.id, thumb: blob, updated: n.updated }); thumbs.push([n.id, blob]); photos.push([n.id, blob]);
+  }
+  if (!fix.length) return;
+  await commit({ put: fix, photos, thumbs });
+  render({ keep: true });
+  toast(`ปรับภาพวาดให้ตรงชื่อแล้ว ${fix.length} รายการ`);
+}
+
 /* a thumbnail that fails to decode is rebuilt from the full photo, once per item */
 const healed = new Set();
 document.addEventListener('error', async e => {
@@ -1114,6 +1145,7 @@ document.addEventListener('error', async e => {
   $('meta[name="theme-color"]')?.setAttribute('content', THEMES[curTheme()][1]);
   if (route().name === 'search') S.focusQ = true;
   render();
+  upgradePlaceholders().catch(() => {});
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 })();

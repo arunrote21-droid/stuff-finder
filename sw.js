@@ -1,4 +1,4 @@
-const CACHE = 'stuff-finder-v3';
+const CACHE = 'stuff-finder-v4';
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'art-icons.js', 'art-catalog.js', 'icon.svg', 'manifest.webmanifest',
   'fonts/Kanit-Light.woff2', 'fonts/Kanit-Regular.woff2', 'fonts/Kanit-Medium.woff2',
   'fonts/Kanit-SemiBold.woff2', 'fonts/Kanit-Bold.woff2'];
@@ -17,5 +17,5 @@ self.addEventListener('fetch', e => {
     const copy = r.clone();
     caches.open(CACHE).then(c => c.put(e.request, copy));
     return r;
-  }).catch(() => caches.match(e.request)));
+  }).catch(() => caches.match(e.request, { ignoreSearch: true })));
 });
