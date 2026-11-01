@@ -352,7 +352,7 @@ async function deleteNode(id) {
 }
 
 /* ───────────── drawn stand-in pictures (no photo needed) ───────────── */
-const BUILD = '2026-11-02-a';
+const BUILD = '2026-11-03-a';
 // if a stale page came without the picture library, fetch it now (cache-busted) instead of failing silently
 let artLoading = null;
 function ensureArt() {

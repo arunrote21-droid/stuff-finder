@@ -186,7 +186,7 @@ SH.jar = p => R(24, 30, 52, 56, 12, p.m, 'opacity=".95"') + R(20, 18, 60, 16, 5,
   + R(28, 46, 44, 30, 6, p.l2 || '#fffaf0') + G(EM[p.e || 'dot'](p.a), 'translate(50 61) scale(1.7)') + R(28, 34, 6, 46, 3, '#fff', 'opacity=".28"');
 SH.pouch = p => P('M22 22 H78 L84 82 C84 88 80 90 76 90 H24 C20 90 16 88 16 82Z', p.m) + R(22, 14, 56, 12, 3, p.l) + L('M26 20 H74', p.d, 1.4, 'opacity=".5"')
   + C(50, 58, 17, p.l2 || '#fffaf0') + G(EM[p.e || 'dot'](p.a), 'translate(50 58) scale(1.6)') + P('M22 22 L18 82', 'none', 'stroke="#fff" stroke-width="3" opacity=".25"');
-SH.can = p => R(24, 24, 52, 62, 6, p.m) + E(50, 24, 26, 7, p.l) + E(50, 86, 26, 7, p.d, 0, 'opacity=".5"') + R(24, 44, 52, 28, 0, p.l2 || '#fffaf0') + G(EM[p.e || 'dot'](p.a), 'translate(50 58) scale(1.6)') + R(30, 28, 5, 54, 2.5, '#fff', 'opacity=".3"') + E(50, 24, 14, 3, p.d, 0, 'opacity=".4"');
+SH.can = p => R(24, 24, 52, 62, 6, p.m) + E(50, 24, 26, 7, p.l) + E(50, 86, 26, 7, p.d, 0, 'opacity=".5"') + R(24, 44, 52, 28, 0, p.l2 || '#fffaf0') + G(EM[p.e || 'dot'](/^#f{3}(f{3})?$/i.test(p.a || '') ? darken(p.m, .35) : p.a), 'translate(50 58) scale(1.6)') + R(30, 28, 5, 54, 2.5, '#fff', 'opacity=".3"') + E(50, 24, 14, 3, p.d, 0, 'opacity=".4"');
 SH.tub = p => P('M16 38 H84 L78 80 C78 84 74 86 72 86 H28 C26 86 22 84 22 80Z', p.m) + R(12, 28, 76, 14, 5, p.l, 'opacity=".95"') + R(12, 28, 76, 4, 2, '#fff', 'opacity=".4"')
   + (p.e ? G(EM[p.e](p.a), 'translate(50 62) scale(1.9)') : '') + P('M22 46 L28 80', 'none', 'stroke="#fff" stroke-width="3" opacity=".3"');
 SH.zipbag = p => P('M20 18 H80 L84 84 C84 88 80 90 78 90 H22 C20 90 16 88 16 84Z', '#e8f2f8', 'opacity=".95"') + R(20, 18, 60, 8, 3, p.a) + L('M24 30 H76', '#fff', 2, 'opacity=".8"')
@@ -236,6 +236,23 @@ SH.basket = p => P('M14 42 H86 L78 82 C77 86 74 88 70 88 H30 C26 88 23 86 22 82Z
   + [0, 1, 2, 3, 4].map(i => L(`M${24 + i * 13} 48 L${27 + i * 11} 86`, p.l, 2.4, 'opacity=".6"')).join('') + L('M18 60 H82 M21 74 H79', p.l, 2.4, 'opacity=".6"');
 SH.bin = p => P('M20 30 H80 L74 84 C73.5 88 70 90 66 90 H34 C30 90 26.500 88 26 84Z', p.m) + E(50, 30, 30, 8, p.l) + E(50, 31, 24, 5, p.d, 0, 'opacity=".45"') + R(30, 52, 40, 18, 4, '#fff', 'opacity=".85"') + L('M36 40 L38 84', p.l, 3, 'opacity=".5"');
 SH.tote = p => R(18, 34, 64, 54, 6, p.m) + L('M34 34 C34 10 66 10 66 34', p.d, 5) + R(18, 34, 64, 8, 4, p.l, 'opacity=".45"') + R(34, 52, 32, 22, 4, '#fff', 'opacity=".85"') + G(EM[p.e || 'leaf'](p.a || p.d), 'translate(50 63) scale(1.4)');
+
+/* canned goods + instant noodles */
+EM.mush = c => P('M-7 1 C-7 -6 -3 -8 0 -8 C3 -8 7 -6 7 1Z', c) + R(-2.6, 0, 5.2, 7, 2, '#fff');
+EM.corn = c => E(0, 0, 3.6, 7.5, c) + L('M-2 -4 V4 M0 -5 V5 M2 -4 V4', '#fff', .8);
+const ink = p => (/^#f{3}(f{3})?$/i.test(p.a || '') ? darken(p.m, .35) : p.a);
+SH.tin = p => E(50, 76, 34, 10, p.d) + R(16, 52, 68, 24, 0, p.m) + E(50, 52, 34, 10, p.l) + E(50, 52, 29, 7.5, p.d, 0, 'opacity=".45"')
+  + E(50, 52, 12, 3.6, 'none', 0, `stroke="${p.l}" stroke-width="2.4"`) + R(44, 49, 12, 3.4, 1.7, '#e8e8ee')
+  + R(16, 57, 68, 15, 0, p.l2 || '#fffaf0') + G(EM[p.e || 'fish'](ink(p)), 'translate(50 64.500) scale(1.25)') + R(20, 52, 5, 24, 2.5, '#fff', 'opacity=".28"')
+  + E(50, 76, 34, 10, 'none', 0, `stroke="${p.d}" stroke-width="1.2" opacity=".5"`);
+SH.mama = p => P('M20 18 L24 14 L28 18 L32 14 L36 18 L40 14 L44 18 L48 14 L52 18 L56 14 L60 18 L64 14 L68 18 L72 14 L76 18 L80 14 V86 L76 90 L72 86 L68 90 L64 86 L60 90 L56 86 L52 90 L48 86 L44 90 L40 86 L36 90 L32 86 L28 90 L24 86 L20 90Z', p.m)
+  + R(20, 20, 60, 12, 0, p.d, 'opacity=".55"') + R(20, 74, 60, 8, 0, p.d, 'opacity=".55"')
+  + C(50, 52, 22, '#fff7e8') + P('M32 54 H68 C68 64 60 72 50 72 C40 72 32 64 32 54Z', p.a || '#e8483a') + E(50, 54, 18, 5, '#f6d478')
+  + L('M38 54 C42 48 46 56 50 50 C54 44 58 54 62 48', '#d8a028', 2.2) + L('M40 38 C37 34 43 32 40 28 M50 38 C47 34 53 32 50 28 M60 38 C57 34 63 32 60 28', '#fff', 2, 'opacity=".75"')
+  + R(26, 34, 5, 44, 2.5, '#fff', 'opacity=".25"');
+SH.cupnoodle = p => P('M22 34 H78 L70 86 C69.500 89 67 90 64 90 H36 C33 90 30.500 89 30 86Z', p.m) + E(50, 34, 28, 7, p.l) + E(50, 34, 24, 5, '#f8f4ea') + R(28, 30, 44, 4, 2, p.d, 'opacity=".4"')
+  + P('M25 52 H75 L72 72 H28Z', p.a || '#f8d848') + C(50, 62, 8, '#fff7e8') + P('M42 62 H58 C58 67 54 70 50 70 C46 70 42 67 42 62Z', p.d)
+  + L('M44 25 C42 20 46 18 44 14 M52 25 C50 20 54 18 52 14', '#fff', 2.2, 'opacity=".8"') + P('M74 30 L90 24 L86 36Z', p.l, 'opacity=".9"');
 
 /* ---------- finishing: tile + shadow + optional frozen flake ---------- */
 function flake() {
