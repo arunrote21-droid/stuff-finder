@@ -353,7 +353,7 @@ async function deleteNode(id) {
 }
 
 /* ───────────── drawn stand-in pictures (no photo needed) ───────────── */
-const BUILD = '2026-11-05-a';
+const BUILD = '2026-11-06-a';
 // if a stale page came without the picture library, fetch it now (cache-busted) instead of failing silently
 let artLoading = null;
 function ensureArt() {
@@ -711,7 +711,7 @@ function pageHome() {
   } else {
     const exp = alertItems().sort((a, b) => a.expiry.localeCompare(b.expiry));
     const outSec = out.length ? `<div class="sec" id="outsec"><h2><span class="reddot"></span>ของที่หมดแล้ว · ต้องซื้อเพิ่ม <small>${out.length}</small></h2>${out.length > 8 ? '<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>' : ''}</div><div class="tiles v4">${out.slice(0, 8).map(n => tileHtml(n, { where: true, buy: true })).join('')}</div>` : '';
-    body = `${outSec}${exp.length ? `<div class="sec"><h2>${ic('alert')} ของใกล้หมดอายุ <small>${exp.length}</small></h2>${exp.length > 5 ? `<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>` : ''}</div><div class="list">${exp.slice(0, 5).map(n => miniItem(n, true)).join('')}</div>` : ''}
+    body = `${outSec}${exp.length ? `<div class="sec"><h2>${ic('alert')} ของใกล้หมดอายุ <small>${exp.length}</small></h2>${exp.length > 8 ? `<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>` : ''}</div><div class="tiles v4">${exp.slice(0, 8).map(n => tileHtml(n, { where: true })).join('')}</div>` : ''}
       ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="favrow ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
       ${gridSection(null, true)}`;
   }
