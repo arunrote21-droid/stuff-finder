@@ -38,6 +38,7 @@ const ICONS = {
   star: '<path d="M12 2l3.1 6.3 6.9 1-5 4.9 1.2 6.8-6.2-3.3-6.2 3.3L7 14.2 2 9.3l6.9-1z"/>',
   v1: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   v2: '<path d="M4 5h6v6H4zM14 5h6v6h-6zM4 14h6v6H4zM14 14h6v6h-6z"/>',
+  v4: '<path d="M2 5h3v3H2zM7 5h3v3H7zM12 5h3v3h-3zM17 5h3v3h-3zM2 12h3v3H2zM7 12h3v3H7zM12 12h3v3h-3zM17 12h3v3h-3z"/>',
   v3: '<path d="M3 5h4v4H3zM10 5h4v4h-4zM17 5h4v4h-4zM3 14h4v4H3zM10 14h4v4h-4zM17 14h4v4h-4z"/>',
   cal: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
 };
@@ -352,7 +353,7 @@ async function deleteNode(id) {
 }
 
 /* ───────────── drawn stand-in pictures (no photo needed) ───────────── */
-const BUILD = '2026-11-04-a';
+const BUILD = '2026-11-05-a';
 // if a stale page came without the picture library, fetch it now (cache-busted) instead of failing silently
 let artLoading = null;
 function ensureArt() {
@@ -702,18 +703,20 @@ function pageHome() {
   const order = [...tagList, ...[...count.keys()].filter(t => !tagList.includes(t))].filter(t => count.has(t));
   if (S.tagFilter && !count.has(S.tagFilter)) S.tagFilter = null;
   const tagRow = order.length ? `<div class="tagrow">${order.map(t => `<button class="chip ${S.tagFilter === t ? 'on' : ''}" data-act="tagf" data-tag="${esc(t)}">${esc(t)} <small>${count.get(t)}</small></button>`).join('')}</div>` : '';
+  const out = all.filter(n => n.type === 'item' && n.qty <= 0).sort(cmp);
   let body;
   if (S.tagFilter) {
     const res = all.filter(n => (n.tags || []).includes(S.tagFilter)).sort(cmp);
     body = `<div class="sec"><h2>แท็ก “${esc(S.tagFilter)}” <small>${res.length} รายการ</small></h2><button class="badge" data-act="tagf" data-tag="${esc(S.tagFilter)}" style="padding:5px 12px">${ic('x')} ล้างตัวกรอง</button></div><div class="list">${res.map(n => rowHtml(n)).join('')}</div>`;
   } else {
     const exp = alertItems().sort((a, b) => a.expiry.localeCompare(b.expiry));
-    body = `${exp.length ? `<div class="sec"><h2>${ic('alert')} ของใกล้หมดอายุ <small>${exp.length}</small></h2>${exp.length > 5 ? `<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>` : ''}</div><div class="list">${exp.slice(0, 5).map(n => miniItem(n, true)).join('')}</div>` : ''}
+    const outSec = out.length ? `<div class="sec" id="outsec"><h2><span class="reddot"></span>ของที่หมดแล้ว · ต้องซื้อเพิ่ม <small>${out.length}</small></h2>${out.length > 8 ? '<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>' : ''}</div><div class="tiles v4">${out.slice(0, 8).map(n => tileHtml(n, { where: true, buy: true })).join('')}</div>` : '';
+    body = `${outSec}${exp.length ? `<div class="sec"><h2>${ic('alert')} ของใกล้หมดอายุ <small>${exp.length}</small></h2>${exp.length > 5 ? `<a class="badge" href="#/exp" style="padding:5px 12px">ดูทั้งหมด</a>` : ''}</div><div class="list">${exp.slice(0, 5).map(n => miniItem(n, true)).join('')}</div>` : ''}
       ${favs.length ? `<div class="sec"><h2><span class="star">★</span> รายการโปรด <small>${favs.length}</small></h2></div><div class="favrow ${S.sel ? 'selmode' : ''}">${favs.map(cardHtml).join('')}</div>` : ''}
       ${gridSection(null, true)}`;
   }
   return `<div class="top"><div class="brand"><div class="logo">${ic('box')}</div><h1>ของอยู่ไหน</h1></div>${searchBox()}</div>
-    ${all.length ? `<div class="stats"><div class="stat"><b>${items}</b><small>ของทั้งหมด</small></div><div class="stat"><b>${boxes}</b><small>กล่อง / ที่เก็บ</small></div>
+    ${all.length ? `<div class="stats" style="grid-template-columns:repeat(${out.length ? 4 : 3},1fr)">${out.length ? `<a class="stat out" href="#/" data-act="gotoout"><b>${out.length}</b><small>หมดแล้ว</small></a>` : ''}<div class="stat"><b>${items}</b><small>ของทั้งหมด</small></div><div class="stat"><b>${boxes}</b><small>กล่อง / ที่เก็บ</small></div>
       <a class="stat ${al ? 'alert' : ''}" href="#/exp"><b>${al}</b><small>ใกล้หมดอายุ</small></a></div>${tagRow}` : ''}
     ${body}`;
 }
@@ -769,9 +772,9 @@ function smallRow(n) {
 }
 /* how many tiles per row: 1 = long rows, 2 / 3 = compact tiles (3 is the default) */
 const VIEWKEY = 'stuff-finder:view';
-S.view = (() => { try { const v = +localStorage.getItem(VIEWKEY); return [1, 2, 3].includes(v) ? v : 3; } catch { return 3; } })();
-const viewSwitch = () => `<div class="sw" role="group" aria-label="จำนวนคอลัมน์">${[1, 2, 3].map(k => `<button type="button" data-act="view" data-n="${k}" class="${S.view === k ? 'on' : ''}" aria-label="${k} คอลัมน์">${ic('v' + k)}</button>`).join('')}</div>`;
-function tileHtml(n, { attr = 'data-go', terms = [], where = false } = {}) {
+S.view = (() => { try { const v = +localStorage.getItem(VIEWKEY); return [1, 2, 3, 4].includes(v) ? v : 4; } catch { return 4; } })();
+const viewSwitch = () => `<div class="sw" role="group" aria-label="จำนวนคอลัมน์">${[1, 2, 3, 4].map(k => `<button type="button" data-act="view" data-n="${k}" class="${S.view === k ? 'on' : ''}" aria-label="${k} คอลัมน์">${ic('v' + k)}</button>`).join('')}</div>`;
+function tileHtml(n, { attr = 'data-go', terms = [], where = false, buy = false } = {}) {
   const e = n.type === 'item' && n.qty > 0 ? expInfo(n) : null;
   const urgent = e && (e.cls === 'bad' || e.cls === 'warn');
   const tag = urgent ? `<span class="ttag ${e.cls}">${e.d < 0 ? 'หมดอายุ' : e.d === 0 ? 'วันนี้' : e.d + ' วัน'}</span>` : '';
@@ -781,7 +784,7 @@ function tileHtml(n, { attr = 'data-go', terms = [], where = false } = {}) {
   const p = n.parent ? S.nodes.get(n.parent) : null;
   const w = where ? (p ? `<span class="twhere" data-go="${p.id}"><img src="${thumbUrl(p)}" alt="">${esc(label(p))}</span>` : '<span class="twhere">ชั้นนอกสุด</span>') : '';
   return `<div class="tile" ${attr}="${n.id}" role="button" tabindex="0"><div class="ph"><img src="${thumbUrl(n)}" alt="" loading="lazy">${tag}${n.fav ? '<span class="tstar">★</span>' : ''}</div>
-    <div class="b"><div class="nm">${hl(label(n), terms)}</div><div class="meta">${meta}</div>${w}</div></div>`;
+    <div class="b"><div class="nm">${hl(label(n), terms)}</div><div class="meta">${meta}</div>${w}${buy ? `<button type="button" class="buy" data-act="restock" data-id="${n.id}">ซื้อแล้ว</button>` : ''}</div></div>`;
 }
 const LISTTAB = 'stuff-finder:listtab';
 S.listTab = (() => { try { return localStorage.getItem(LISTTAB) === 'box' ? 'box' : 'item'; } catch { return 'item'; } })();
@@ -998,6 +1001,12 @@ const A = {
     render({ keep: true });
   },
   theme: d => { setTheme(d.t); render({ keep: true }); },
+  gotoout: () => $('#outsec')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+  async restock(d) {
+    const n = S.nodes.get(d.id); if (!n) return;
+    await commit({ put: [{ ...n, qty: 1 }] }, `เติม “${label(n)}” แล้ว (1 ${n.unit || 'ชิ้น'})`);
+    render({ keep: true });
+  },
   view: d => { S.view = +d.n; try { localStorage.setItem(VIEWKEY, String(S.view)); } catch { /* storage blocked */ } render({ keep: true }); },
   ltab: d => {
         S.listTab = d.tab === 'box' ? 'box' : 'item'; S.listQ = '';

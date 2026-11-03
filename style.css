@@ -344,3 +344,25 @@ button.chip{border:0;cursor:pointer}
 .tiles.v3 .twhere{font-size:.64rem}
 .tiles.v2 .nm{font-size:.98rem}
 .tile .twhere span,.tile .twhere{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* 4 per row */
+.tiles.v4{grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.tiles.v4 .tile{border-radius:10px}
+.tiles.v4 .b{padding:5px 5px 6px}
+.tiles.v4 .nm{font-size:.72rem;line-height:1.15}
+.tiles.v4 .meta{margin-top:3px;gap:3px}
+.tiles.v4 .badge{font-size:.6rem;padding:0 5px}
+.tiles.v4 .meta .badge:not(:first-child):not(.bad){display:none}
+.tiles.v4 .twhere{font-size:0;margin-top:4px;gap:0}
+.tiles.v4 .twhere img{width:14px;height:14px}
+.tiles.v4 .ttag{font-size:.54rem;padding:0 5px;top:3px;right:3px}
+.tiles.v4 .tstar{font-size:.8rem;left:4px;top:1px}
+.sw button{width:32px}
+/* out of stock */
+.reddot{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--bad);margin-right:7px;vertical-align:middle}
+#outsec{scroll-margin-top:150px}
+.buy{width:100%;margin-top:5px;height:24px;border-radius:99px;background:var(--accent);color:var(--accent-ink);font-size:.64rem;font-weight:600}
+.buy:active{transform:scale(.96)}
+.stat.out{background:var(--bad-soft)}
+.stat.alert b{color:var(--bad)}
+.stats .stat small{font-size:.72rem;display:block;line-height:1.2}
