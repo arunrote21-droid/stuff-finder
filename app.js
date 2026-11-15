@@ -7,13 +7,23 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-b';
+const BUILD = 'sheet-2026-11-15-c';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
 const noExt = n => n.replace(/\.[^.]+$/, '');
 
 /* ───────────── storage (IndexedDB) ───────────── */
+/* thumbnails live in their own small database so the main one never needs an upgrade */
+const TH = {
+  p: null,
+  open() { return this.p || (this.p = new Promise((res, rej) => { const r = indexedDB.open('sheet-thumbs', 1); r.onupgradeneeded = () => r.result.createObjectStore('t'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); })); },
+  async run(mode, fn) { const d = await this.open(); return new Promise((res, rej) => { const t = d.transaction('t', mode); const out = fn(t.objectStore('t')); t.oncomplete = () => res(out instanceof IDBRequest ? out.result : out); t.onerror = t.onabort = () => rej(t.error); }); },
+  get: id => TH.run('readonly', s => s.get(id)),
+  put: (id, b) => TH.run('readwrite', s => s.put(b, id)),
+  del: id => { TH.run('readwrite', s => s.delete(id)).catch(() => {}); },
+  clear: () => { TH.run('readwrite', s => s.clear()).catch(() => {}); },
+};
 const DB = {
   db: null,
   open() {
@@ -36,11 +46,11 @@ const DB = {
   allSets: () => DB.tx(['sets'], 'readonly', s => s.getAll()),
   page: (id, i) => DB.tx(['pages'], 'readonly', s => s.get(id + ':' + i)),
   putSong: (song, blobs) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + i)); }),
-  delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); for (let i = 0; i < song.n; i++) ps.delete(song.id + ':' + i); }),
+  delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) ps.delete(song.id + ':' + i); }),
   putSongMeta: song => DB.tx(['songs'], 'readwrite', s => s.put(song)),
   putSet: set => DB.tx(['sets'], 'readwrite', s => s.put(set)),
   delSet: id => DB.tx(['sets'], 'readwrite', s => s.delete(id)),
-  clear: () => DB.tx(['songs', 'pages', 'sets'], 'readwrite', (a, b, c) => { a.clear(); b.clear(); c.clear(); }),
+  clear: () => { TH.clear(); return DB.tx(['songs', 'pages', 'sets'], 'readwrite', (a, b, c) => { a.clear(); b.clear(); c.clear(); }); },
 };
 
 /* ───────────── state ───────────── */
@@ -234,24 +244,41 @@ function renderResults() {
   watchThumbs();
 }
 
-const thumbCache = new Map(); let thumbIO = null;
+/* Result thumbnails: tiny JPEGs saved once in IndexedDB, made one at a time (never decode several big pages at once). */
+const thumbCache = new Map(); let thumbIO = null, thumbQ = [], thumbBusy = false;
+async function decodeSmall(b) {
+  try { return await createImageBitmap(b, { imageOrientation: 'from-image', resizeWidth: 200, resizeQuality: 'low' }); }
+  catch { return await createImageBitmap(b); }
+}
 async function makeThumb(id) {
   if (thumbCache.has(id)) return thumbCache.get(id);
-  const b = await DB.page(id, 0); if (!b) return null;
-  const bmp = await createImageBitmap(b, { imageOrientation: 'from-image' });
-  const w = 200, h = Math.round(bmp.height * w / bmp.width), c = document.createElement('canvas'); c.width = w; c.height = h;
-  c.getContext('2d').drawImage(bmp, 0, 0, w, h); bmp.close?.();
-  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.7)); const u = URL.createObjectURL(blob);
-  thumbCache.set(id, u); if (thumbCache.size > 400) { const k = thumbCache.keys().next().value; URL.revokeObjectURL(thumbCache.get(k)); thumbCache.delete(k); }
+  let blob = null; try { blob = await TH.get(id); } catch { /* no store yet */ }
+  if (!blob) {
+    const b = await DB.page(id, 0); if (!b) return null;
+    const bmp = await decodeSmall(b);
+    const w = 200, h = Math.max(1, Math.round(bmp.height * w / bmp.width)), c = document.createElement('canvas'); c.width = w; c.height = h;
+    c.getContext('2d').drawImage(bmp, 0, 0, w, h); bmp.close?.();
+    blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.6)); c.width = c.height = 0;
+    if (blob) TH.put(id, blob).catch(() => {});
+  }
+  if (!blob) return null;
+  const u = URL.createObjectURL(blob);
+  thumbCache.set(id, u); if (thumbCache.size > 500) { const k = thumbCache.keys().next().value; URL.revokeObjectURL(thumbCache.get(k)); thumbCache.delete(k); }
   return u;
 }
+async function pumpThumbs() {
+  if (thumbBusy) return; thumbBusy = true;
+  while (thumbQ.length) {
+    const row = thumbQ.shift(); if (!row.isConnected || !row._vis) continue;
+    try { const u = await makeThumb(row.dataset.id); const im = row.querySelector('.th img'); if (u && im && row.isConnected) { im.src = u; im.classList.add('on'); } } catch { /* skip this one */ }
+    await new Promise(r => setTimeout(r, 16));
+  }
+  thumbBusy = false;
+}
 function watchThumbs() {
-  const res = $('#res'); if (!res) return; thumbIO?.disconnect();
-  thumbIO = new IntersectionObserver(es => es.forEach(async e => {
-    if (!e.isIntersecting) return; const row = e.target; thumbIO.unobserve(row);
-    const u = await makeThumb(row.dataset.id); const im = row.querySelector('.th img'); if (u && im) { im.src = u; im.classList.add('on'); }
-  }), { root: res, rootMargin: '200px' });
-  res.querySelectorAll('.rs').forEach(r => thumbIO.observe(r));
+  const res = $('#res'); if (!res) return; thumbIO?.disconnect(); thumbQ = [];
+  thumbIO = new IntersectionObserver(es => { es.forEach(e => { const row = e.target; row._vis = e.isIntersecting; if (e.isIntersecting) thumbQ.push(row); }); pumpThumbs(); }, { root: res, rootMargin: '120px' });
+  res.querySelectorAll('.rs').forEach(r => { const u = thumbCache.get(r.dataset.id), im = r.querySelector('.th img'); if (u && im) { im.src = u; im.classList.add('on'); } else thumbIO.observe(r); });
 }
 /* ───────────── drag to reorder (strip: press & hold, list: grab handle) ───────────── */
 function sortable(root, o) {
