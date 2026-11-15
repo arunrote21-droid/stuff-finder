@@ -1,6 +1,6 @@
 {
-  "name": "โน้ตเพลง",
-  "short_name": "โน้ตเพลง",
+  "name": "โน้ตเนตร",
+  "short_name": "โน้ตเนตร",
   "description": "เปิดโน้ตเพลงตอนเล่นดนตรี จัดคิวเพลงได้",
   "start_url": "./index.html",
   "scope": "./",

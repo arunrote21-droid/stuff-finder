@@ -178,7 +178,7 @@ async function showPage() {
 }
 function renderTop() {
   const song = curSong();
-  $('#tSong').textContent = song ? song.name : 'โน้ตเพลง';
+  $('#tSong').textContent = song ? song.name : 'โน้ตเนตร';
   $('#tSet').textContent = S.setName ? `ชุด: ${S.setName}` : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
   if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; }
 }
@@ -539,7 +539,7 @@ async function doBackup() {
     sj.push(new TextEncoder().encode(JSON.stringify(S.sets.map(x => ({ name: x.name, songs: x.songs.map(id => S.songs.get(id)?.name).filter(Boolean) })))), true);
     zip.end();
     const blob = new Blob(chunks, { type: 'application/zip' }); const d = new Date();
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `สำรองโน้ตเพลง-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.zip`;
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `สำรองโน้ตเนตร-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}.zip`;
     document.body.append(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 8000);
     s.close(); toast(`สร้างไฟล์สำรองแล้ว (${(blob.size / 1048576).toFixed(0)} MB) ดูในแอปไฟล์ → ดาวน์โหลด`);
   } catch (err) { s.close(); toast('สำรองไม่สำเร็จ: ' + (err.message || err)); }
