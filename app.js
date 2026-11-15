@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-g';
+const BUILD = 'sheet-2026-11-15-h';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -186,6 +186,7 @@ function clampZ() {
 }
 // zoom to scale s2 keeping the page point under (cx, cy) (stage coordinates) where it is
 function zoomAt(s2, cx, cy) { const k = s2 / Z.s; Z.tx = cx - (cx - Z.tx) * k; Z.ty = cy - (cy - Z.ty) * k; Z.s = s2; clampZ(); applyZoom(); }
+function zanim() { const i = $('#pg'); i.classList.add('zanim'); clearTimeout(zanim.t); zanim.t = setTimeout(() => i.classList.remove('zanim'), 340); }
 function resetZoom() { Z.s = 1; Z.tx = 0; Z.ty = 0; applyZoom(); }
 
 /* ───────────── rendering ───────────── */
@@ -247,7 +248,7 @@ function openSearch() {
   $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
   renderResults(); setLetterMode(false); $('#qi').focus();
 }
-function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); $('#panel').innerHTML = ''; document.activeElement?.blur?.(); showPage(); chromeArm(); }
+function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); setTimeout(() => { if (!S.searching) $('#panel').innerHTML = ''; }, 420); document.activeElement?.blur?.(); showPage(); chromeArm(); }
 function setLetterMode(on) {
   S.letterMode = on; $('#letters').classList.toggle('hidden', !on); $('#lm').textContent = on ? '⌨' : 'ก–ฮ';
   if (on) { S.q = ''; $('#qi').value = ''; S.letter = ''; document.activeElement?.blur?.(); renderLetters(); renderResults(); } else { S.letter = ''; renderResults(); $('#qi').focus(); }
@@ -666,7 +667,7 @@ const ACT = {
   addnext: (d, el) => addFromRow(el, 'next', false),
   addend: (d, el) => addFromRow(el, 'end', false),
   nextsong: () => play(S.cur + 1),
-  zoom: () => { const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
+  zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
 document.addEventListener('click', e => {
   if (LP.fired && e.target.closest('#res .rs button[data-act]')) { LP.fired = false; e.preventDefault(); return; }
@@ -744,7 +745,7 @@ function turn(d, cross) {
     if ($('#app').classList.contains('reading') && !e.target.closest?.('button') && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
     if (x > 0.68) { turn(1); lastTap = null; } else if (x < 0.32) { turn(-1); lastTap = null; }
     else { // middle: double tap zooms in / back out
-      if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
+      if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
       else lastTap = { t: Date.now(), x: cx, y: cy };
     }
   };

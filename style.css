@@ -172,3 +172,13 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .reading .main{padding:0 0 env(safe-area-inset-bottom)}
 .reading .stage{border-radius:0}
 @media (prefers-reduced-motion:reduce){.top,.strip,.main{transition:none}}
+
+/* smooth: the score eases to its new size when search opens/closes */
+.stage{flex:0 0 100%;transition:flex-basis .38s cubic-bezier(.4,0,.2,1)}
+.panel{display:flex;flex:0 0 0;margin-left:-8px;opacity:0;overflow:hidden;pointer-events:none;transition:margin-left .38s cubic-bezier(.4,0,.2,1),margin-top .38s cubic-bezier(.4,0,.2,1),opacity .2s ease}
+.searching .panel{flex:1 1 0;margin-left:0;opacity:1;pointer-events:auto;transition:margin-left .38s cubic-bezier(.4,0,.2,1),margin-top .38s cubic-bezier(.4,0,.2,1),opacity .3s ease .12s}
+.main{transition:max-height .35s,padding .38s cubic-bezier(.4,0,.2,1),gap .38s cubic-bezier(.4,0,.2,1)}
+@media (min-width:700px){.searching .top{display:flex!important;max-height:0;opacity:0;padding-top:0;padding-bottom:0;overflow:hidden;pointer-events:none}}
+@media (max-width:699px){.panel{margin-left:0;margin-top:-8px}.searching .panel{margin-top:0}}
+#pg.zanim{transition:transform .32s cubic-bezier(.4,0,.2,1)}
+@media (prefers-reduced-motion:reduce){.stage,.panel,.main,#pg.zanim{transition:none!important}}
