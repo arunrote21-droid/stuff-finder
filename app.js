@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-a';
+const BUILD = 'sheet-2026-11-15-b';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -227,12 +227,32 @@ function renderResults() {
   const slice = list.slice(0, S.shown);
   res.innerHTML = (slice.length ? slice.map(s => {
     const pos = S.queue.indexOf(s.id) + 1;
-    return `<div class="rs" data-id="${s.id}"><div class="rn">${hl(s.name, terms)}<small>${s.n} หน้า${pos ? ` · <span class="inq">อยู่ในคิวลำดับ ${pos}</span>` : ''}</small></div><button data-act="addnext">ถัดไป</button><button class="p" data-act="addend">ท้ายคิว</button></div>`;
+    return `<div class="rs" data-id="${s.id}"><div class="rn">${hl(s.name, terms)}<small>${s.n} หน้า${pos ? ` · <span class="inq">อยู่ในคิวลำดับ ${pos}</span>` : ''}</small></div><div class="th"><img alt=""></div><div class="rb"><button data-act="addnext">ถัดไป</button><button class="p" data-act="addend">ท้ายคิว</button></div></div>`;
   }).join('') : `<div class="note">${S.songs.size ? 'ไม่พบเพลงที่ค้นหา ลองพิมพ์ให้สั้นลง' : 'ยังไม่มีเพลง กดปิดแล้วเลือก ☰ → นำเข้าโน้ต'}</div>`)
     + (list.length > S.shown ? `<button class="btn o sm more" data-act="more">แสดงเพิ่ม (อีก ${list.length - S.shown} เพลง)</button>` : '')
     + (list.length ? `<div class="note">${list.length} เพลง</div>` : '');
+  watchThumbs();
 }
 
+const thumbCache = new Map(); let thumbIO = null;
+async function makeThumb(id) {
+  if (thumbCache.has(id)) return thumbCache.get(id);
+  const b = await DB.page(id, 0); if (!b) return null;
+  const bmp = await createImageBitmap(b, { imageOrientation: 'from-image' });
+  const w = 200, h = Math.round(bmp.height * w / bmp.width), c = document.createElement('canvas'); c.width = w; c.height = h;
+  c.getContext('2d').drawImage(bmp, 0, 0, w, h); bmp.close?.();
+  const blob = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.7)); const u = URL.createObjectURL(blob);
+  thumbCache.set(id, u); if (thumbCache.size > 400) { const k = thumbCache.keys().next().value; URL.revokeObjectURL(thumbCache.get(k)); thumbCache.delete(k); }
+  return u;
+}
+function watchThumbs() {
+  const res = $('#res'); if (!res) return; thumbIO?.disconnect();
+  thumbIO = new IntersectionObserver(es => es.forEach(async e => {
+    if (!e.isIntersecting) return; const row = e.target; thumbIO.unobserve(row);
+    const u = await makeThumb(row.dataset.id); const im = row.querySelector('.th img'); if (u && im) { im.src = u; im.classList.add('on'); }
+  }), { root: res, rootMargin: '200px' });
+  res.querySelectorAll('.rs').forEach(r => thumbIO.observe(r));
+}
 /* ───────────── drag to reorder (strip: press & hold, list: grab handle) ───────────── */
 function sortable(root, o) {
   let st = null;

@@ -110,3 +110,45 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #toast.show{opacity:1;transform:translate(-50%,0);pointer-events:auto}
 #toast button{color:#0f766e;font-weight:600}
 .spin{display:inline-block;width:16px;height:16px;border:2.5px solid currentColor;border-right-color:transparent;border-radius:50%;animation:rot .7s linear infinite}@keyframes rot{to{transform:rotate(360deg)}}
+
+.rs .th{flex:none;width:58px;height:78px;border-radius:6px;background:#f7f3e9;overflow:hidden;position:relative}
+.rs .th img{width:100%;height:100%;object-fit:cover;object-position:top;opacity:0;transition:opacity .2s}.rs .th img.on{opacity:1}
+.rs .rn{align-self:flex-start}
+.rs .rb{display:flex;gap:6px;flex:none}
+@media (min-width:700px){.searching .stage{flex:0 0 62%}.searching .top{display:none}
+.searching .rs{flex-wrap:wrap;align-items:flex-start;gap:6px 10px;padding:8px}
+.searching .rs .th{width:64px;height:88px}
+.searching .rs .rn{flex:1;min-width:0;flex-basis:0;padding-top:2px}
+.searching .rs .rb{flex:1 0 100%;padding-left:74px;margin-top:-30px}
+.searching .rs .rb button{flex:1;height:30px}}
+
+/* v6: name on top, small thumb under it, buttons beside thumb */
+@media (min-width:700px){.searching .stage{flex:0 0 76%}.searching .main{gap:6px;padding:0 6px 6px}
+.searching .sbox{height:36px}.searching .sbox input{font-size:.9rem}.searching .phead{flex-wrap:wrap;gap:5px}.searching .sbox{flex:1 0 100%}
+.searching .phead .ib{flex:1;height:30px;font-size:.76rem;padding:0 6px}
+.searching .rs{display:grid;grid-template-columns:auto 1fr;gap:4px 8px;align-items:center;padding:6px 8px}
+.searching .rs .rn{grid-column:1/3;font-size:.88rem;flex:none}.searching .rs .rn small{font-size:.66rem}
+.searching .rs .th{grid-column:1;grid-row:2;width:46px;height:62px;margin:0}
+.searching .rs .rb{grid-column:2;grid-row:2;flex-direction:column;padding:0;margin:0;gap:5px}
+.searching .rs .rb button{height:28px;font-size:.74rem;padding:0 4px;flex:none}}
+/* v7: buttons under the thumb */
+@media (min-width:700px){
+.searching .rs{grid-template-columns:1fr 1fr;gap:4px 6px}
+.searching .rs .rn{grid-column:1/3}
+.searching .rs .th{grid-column:1/3;grid-row:2;width:100%;height:58px}
+.searching .rs .th img{object-position:top}
+.searching .rs .rb{grid-column:1/3;grid-row:3;flex-direction:row}
+.searching .rs .rb button{flex:1}}
+/* v8: 4 songs */
+@media (min-width:700px){
+.searching .res{gap:5px}
+.searching .rs{gap:3px 6px;padding:5px 8px}
+.searching .rs .rn{font-size:.84rem;line-height:1.1;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.searching .rs .rn small{display:inline}
+.searching .rs .th{height:38px}
+.searching .rs .rb button{height:26px}}
+/* v9: half-page thumb */
+@media (min-width:700px){
+.searching .rs .th{width:116px;height:82px;justify-self:center;grid-column:1/3}
+.searching .rs .th img{object-fit:cover;object-position:top}
+.searching .rs{gap:4px 6px}}
