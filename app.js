@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-m';
+const BUILD = 'sheet-2026-11-15-n';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -714,6 +714,9 @@ function turn(d, cross) {
   if (np < 0) { if (cross && S.cur > 0) { play(S.cur - 1); const prev = curSong(); if (prev) { S.page = prev.n - 1; showPage(); toast('▶ ' + prev.name); } } return; }
   S.page = np; if (Z.s > 1) zanim(); resetZoom(); showPage(); // a new page always starts fully zoomed out
 }
+let lastCorner = 0, pendingSearch = 0;
+// opened from the click that follows the double tap, so iOS accepts the keyboard
+document.addEventListener('click', () => { if (pendingSearch && Date.now() - pendingSearch < 700) { pendingSearch = 0; if (!S.searching) openSearch(); } }, true);
 // edge tap = turn the page; a second quick tap on the same edge jumps to the next / previous song instead
 let lastEdge = null;
 function edgeTap(side) {
@@ -758,7 +761,13 @@ function edgeTap(side) {
     if (Z.s === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) { turn(dx < 0 ? 1 : -1); return; }
     if (moved >= 12 || !quick) return;
     if (S.searching) { closeSearch(); lastTap = null; lastEdge = null; return; } // tapping the score anywhere closes the search
-    if ($('#app').classList.contains('reading') && !e.target.closest?.('button') && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
+    const nb = $('#nextSong'), br = nb.hidden ? null : nb.getBoundingClientRect(), onBtn = !!br && pt.x >= br.left && pt.x <= br.right && pt.y >= br.top && pt.y <= br.bottom;
+    if (!onBtn && x > 0.68 && cy > r.height * 0.8) { // bottom-right corner: a quick double tap opens the search with the keyboard
+      const now = Date.now();
+      if (lastCorner && now - lastCorner < 330) { lastCorner = null; if (lastEdge) { S.page = lastEdge.page; lastEdge = null; showPage(); } pendingSearch = now; lastTap = null; return; }
+      lastCorner = now;
+    }
+    if ($('#app').classList.contains('reading') && !onBtn && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
     if (x > 0.68) { edgeTap(1); lastTap = null; } else if (x < 0.32) { edgeTap(-1); lastTap = null; }
     else { // middle: double tap zooms in / back out
       if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
