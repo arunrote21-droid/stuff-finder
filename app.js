@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-c';
+const BUILD = 'sheet-2026-11-15-d';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -204,7 +204,7 @@ function renderAll() { renderTop(); renderStrip(); showPage(); if (S.searching) 
 function openSearch() {
   S.searching = true; S.q = ''; S.letter = ''; S.shown = 120;
   $('#app').classList.add('searching');
-  $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="res" id="res"></div>`;
+  $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
   renderResults(); setLetterMode(false); $('#qi').focus();
 }
 function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); $('#panel').innerHTML = ''; document.activeElement?.blur?.(); showPage(); }
@@ -583,6 +583,20 @@ async function openInfo() {
 }
 
 /* ───────────── events ───────────── */
+/* tap = add and close the search; press & hold = add and keep searching (for building a list) */
+function addFromRow(el, where, keepOpen) {
+  const id = el.closest('.rs').dataset.id;
+  addToQueue(id, where === 'next' && !S.queue.length ? 'first' : where);
+  if (!keepOpen) closeSearch();
+}
+const LP = { t: 0, fired: false, x: 0, y: 0 };
+document.addEventListener('pointerdown', e => {
+  const b = e.target.closest('#res .rs button[data-act]'); if (!b || !/^add/.test(b.dataset.act)) return;
+  clearTimeout(LP.t); LP.fired = false; LP.x = e.clientX; LP.y = e.clientY;
+  LP.t = setTimeout(() => { LP.fired = true; b.classList.add('lp'); setTimeout(() => b.classList.remove('lp'), 500); addFromRow(b, b.dataset.act === 'addnext' ? 'next' : 'end', true); }, 450);
+});
+document.addEventListener('pointermove', e => { if (LP.t && Math.hypot(e.clientX - LP.x, e.clientY - LP.y) > 10) clearTimeout(LP.t); });
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => clearTimeout(LP.t)));
 const ACT = {
   menu: openMenu, import: openImport, queue: openQueueSheet,
   add: () => { if (!S.searching) openSearch(); else $('#qi')?.focus(); },
@@ -591,12 +605,13 @@ const ACT = {
   lettermode: () => setLetterMode(!S.letterMode),
   letter: d => { S.letter = S.letter === d.l ? '' : d.l; S.shown = 120; renderLetters(); renderResults(); },
   more: () => { S.shown += 150; renderResults(); },
-  addnext: (d, el) => addToQueue(el.closest('.rs').dataset.id, S.queue.length ? 'next' : 'first'),
-  addend: (d, el) => addToQueue(el.closest('.rs').dataset.id, 'end'),
+  addnext: (d, el) => addFromRow(el, 'next', false),
+  addend: (d, el) => addFromRow(el, 'end', false),
   nextsong: () => play(S.cur + 1),
   zoom: () => { const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
 document.addEventListener('click', e => {
+  if (LP.fired && e.target.closest('#res .rs button[data-act]')) { LP.fired = false; e.preventDefault(); return; }
   const a = e.target.closest('[data-act]'); if (a && ACT[a.dataset.act]) { e.preventDefault(); ACT[a.dataset.act](a.dataset, a); return; }
   const qc = e.target.closest('#qwrap .qc[data-i]'); if (qc && !justDragged($('#qwrap'))) play(+qc.dataset.i);
 });

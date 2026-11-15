@@ -152,3 +152,9 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .searching .rs .th{width:116px;height:82px;justify-self:center;grid-column:1/3}
 .searching .rs .th img{object-fit:cover;object-position:top}
 .searching .rs{gap:4px 6px}}
+
+/* tap adds & closes; hold adds & keeps open */
+#res .rs button{-webkit-touch-callout:none;user-select:none;-webkit-user-select:none}
+#res .rs button.lp{animation:lp .5s ease-out}
+@keyframes lp{0%{box-shadow:0 0 0 0 rgba(52,211,153,.8)}100%{box-shadow:0 0 0 14px rgba(52,211,153,0)}}
+.phint{font-size:.7rem;color:var(--mut);text-align:center;line-height:1.2;padding:0 2px}
