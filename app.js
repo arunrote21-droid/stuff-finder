@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-h';
+const BUILD = 'sheet-2026-11-15-i';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -710,7 +710,7 @@ function turn(d, cross) {
   const np = S.page + d;
   if (np >= song.n) { if (cross && S.cur + 1 < S.queue.length) { play(S.cur + 1); toast('▶ ' + (curSong()?.name || '')); } else if (cross) toast('จบคิวแล้ว'); return; }
   if (np < 0) { if (cross && S.cur > 0) { play(S.cur - 1); const prev = curSong(); if (prev) { S.page = prev.n - 1; showPage(); toast('▶ ' + prev.name); } } return; }
-  S.page = np; Z.tx = 0; Z.ty = 0; applyZoom(); showPage(); // zoom level stays, view jumps to the top-left of the new page
+  S.page = np; if (Z.s > 1) zanim(); resetZoom(); showPage(); // a new page always starts fully zoomed out
 }
 // gestures on the score: swipe / edge tap = turn page; pinch = zoom; drag when zoomed = pan; double tap in the middle = zoom
 (() => {
