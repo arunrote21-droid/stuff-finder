@@ -158,3 +158,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #res .rs button.lp{animation:lp .5s ease-out}
 @keyframes lp{0%{box-shadow:0 0 0 0 rgba(52,211,153,.8)}100%{box-shadow:0 0 0 14px rgba(52,211,153,0)}}
 .phint{font-size:.7rem;color:var(--mut);text-align:center;line-height:1.2;padding:0 2px}
+
+.rtlog{min-height:120px;display:flex;flex-direction:column;gap:6px;margin:8px 0 12px}
+.rtr{display:flex;gap:8px;align-items:center;background:var(--s2);border-radius:10px;padding:8px 10px;font-size:.9rem}
+.rtr b{flex:none;min-width:84px}.rtr span{flex:1;color:var(--mut)}.rtr em{font-style:normal;font-size:.78rem;color:var(--mut)}
+.rtr.ok em{color:var(--acink);background:var(--ac);border-radius:99px;padding:1px 10px;font-weight:600}

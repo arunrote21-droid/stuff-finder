@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-d';
+const BUILD = 'sheet-2026-11-15-e';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -497,9 +497,25 @@ function openMenu() {
     <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
+    <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+}
+
+function openRemoteTest() {
+  const s = sheet(`<h3>ทดสอบรีโมท / ตัวเหยียบ</h3><p class="sub">จับคู่อุปกรณ์ใน การตั้งค่า → Bluetooth แล้วกดปุ่มต่างๆ ด้านล่างจะแสดงสิ่งที่ส่งมา ถ้าเห็น “พลิกหน้าได้” แปลว่าใช้กับแอปนี้ได้</p><div id="rtLog" class="rtlog"><div class="note">ยังไม่มีสัญญาณ กดปุ่มบนอุปกรณ์ได้เลย</div></div><div class="imp"><button class="btn o" data-close>ปิด</button></div>`);
+  const log = $('#rtLog', s.el); const rows = [];
+  const add = (kind, text, ok) => { rows.unshift(`<div class="rtr ${ok ? 'ok' : ''}"><b>${kind}</b><span>${esc(text)}</span><em>${ok ? 'พลิกหน้าได้' : 'ยังไม่ใช้'}</em></div>`); rows.length = Math.min(rows.length, 12); log.innerHTML = rows.join(''); };
+  const live = () => document.body.contains(s.el);
+  const onKey = e => { if (!live()) return removeEventListener('keydown', onKey, true); e.preventDefault(); add('คีย์บอร์ด', `${e.key === ' ' ? 'Space' : e.key} (${e.code || '-'})`, NEXT_KEYS.has(e.key) || PREV_KEYS.has(e.key)); };
+  const onWheel = e => { if (!live()) return removeEventListener('wheel', onWheel, true); add('ลูกกลิ้ง', `เลื่อน ${e.deltaY > 0 ? 'ลง' : 'ขึ้น'} (${Math.round(e.deltaY)})`, true); };
+  let start = null;
+  const onDown = e => { if (!live()) return removeEventListener('pointerdown', onDown, true); if (s.el.contains(e.target)) return; start = { x: e.clientX, y: e.clientY, t: e.pointerType }; };
+  const onUp = e => { if (!live()) return removeEventListener('pointerup', onUp, true); if (!start) return; const dx = e.clientX - start.x, dy = e.clientY - start.y; const sw = Math.hypot(dx, dy) > 40; add(start.t === 'mouse' ? 'เมาส์/ตัวชี้' : 'นิ้ว/สัมผัส', sw ? `ปัด ${Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'ขวา' : 'ซ้าย') : (dy > 0 ? 'ลง' : 'ขึ้น')}` : 'แตะ', sw); start = null; };
+  s.scrim.addEventListener('pointerdown', e => e.stopImmediatePropagation(), true); // taps outside must not close the tester
+  addEventListener('keydown', onKey, true); addEventListener('wheel', onWheel, { capture: true, passive: true }); addEventListener('pointerdown', onDown, true); addEventListener('pointerup', onUp, true);
+  s.el.addEventListener('click', e => { if (e.target.closest('[data-close]')) s.close(); });
 }
 function openQueueSheet() {
   const s = sheet(`<h3>คิวเล่น <small style="color:var(--mut);font-weight:400">${S.queue.length} เพลง</small></h3><p class="sub">แตะเพลงเพื่อเล่น · จับ ⠿ แล้วลากเพื่อสลับลำดับ · ✕ เอาออก</p><div id="qlist"></div><div class="row2"><button class="btn o" data-q="save">บันทึกเป็นชุดเล่น</button><button class="btn bad" data-q="clear">ล้างคิว</button></div>`);
@@ -616,11 +632,30 @@ document.addEventListener('click', e => {
   const qc = e.target.closest('#qwrap .qc[data-i]'); if (qc && !justDragged($('#qwrap'))) play(+qc.dataset.i);
 });
 document.addEventListener('input', e => { if (e.target.id === 'qi') { S.q = e.target.value; S.shown = 120; renderResults(); } });
-document.addEventListener('keydown', e => { if (e.target.id === 'qi' && e.key === 'Enter') e.target.blur(); if (e.key === 'ArrowRight' || e.key === 'PageDown') turn(1); if (e.key === 'ArrowLeft' || e.key === 'PageUp') turn(-1); });
+/* remote controls: Bluetooth page-turner pedals / keyboards (keys), rings with a scroll wheel (wheel) */
+const sheetOpen = () => !!document.querySelector('#layer .scrim');
+const typing = t => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
+const NEXT_KEYS = new Set(['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter']), PREV_KEYS = new Set(['ArrowLeft', 'ArrowUp', 'PageUp']);
+document.addEventListener('keydown', e => {
+  if (e.target.id === 'qi' && e.key === 'Enter') { e.target.blur(); return; }
+  if (e.altKey || e.ctrlKey || e.metaKey || sheetOpen() || typing(e.target)) return;
+  const next = NEXT_KEYS.has(e.key), prev = PREV_KEYS.has(e.key); if (!next && !prev) return;
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.closest?.('button,[data-act]')) return; // let focused buttons work normally
+  e.preventDefault(); turn(next ? 1 : -1, true);
+});
+let wheelAt = 0;
+document.addEventListener('wheel', e => {
+  if (e.ctrlKey || sheetOpen() || typing(e.target) || e.target.closest?.('#res,.sheet,#qwrap')) return;
+  if (!curSong() || !e.deltaY) return; e.preventDefault();
+  if (Z.s > 1) { Z.ty -= e.deltaY; clampZ(); applyZoom(); return; }
+  const now = Date.now(); if (now - wheelAt < 280) return; wheelAt = now; turn(e.deltaY > 0 ? 1 : -1, true);
+}, { passive: false });
 
-function turn(d) {
+function turn(d, cross) {
   const song = curSong(); if (!song || S.searching && document.activeElement?.id === 'qi') return;
-  const np = S.page + d; if (np < 0 || np >= song.n) return;
+  const np = S.page + d;
+  if (np >= song.n) { if (cross && S.cur + 1 < S.queue.length) play(S.cur + 1); else if (cross) toast('จบคิวแล้ว'); return; }
+  if (np < 0) { if (cross && S.cur > 0) { play(S.cur - 1); const prev = curSong(); if (prev) { S.page = prev.n - 1; showPage(); } } return; }
   S.page = np; Z.tx = 0; Z.ty = 0; applyZoom(); showPage(); // zoom level stays, view jumps to the top-left of the new page
 }
 // gestures on the score: swipe / edge tap = turn page; pinch = zoom; drag when zoomed = pan; double tap in the middle = zoom
