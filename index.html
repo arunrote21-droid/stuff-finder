@@ -2,28 +2,135 @@
 <html lang="th">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>ของอยู่ไหน — สมุดจดที่เก็บของ</title>
-<meta name="description" content="ถ่ายรูปของ กล่อง ตู้ แล้วจัดซ้อนกันเหมือนโฟลเดอร์ ค้นหาแล้วรู้ทันทีว่าของอยู่ตรงไหน">
-<meta name="theme-color" content="#bfe6cc">
-<script>
-// apply the saved color mode before first paint so there is no flash
-try { var t = localStorage.getItem('stuff-finder:theme'); if (t === 'gray' || t === 'dark') document.documentElement.dataset.theme = t; } catch (e) {}
-</script>
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="stylesheet" href="style.css">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ทดสอบนำเข้าโน้ต</title>
+<style>
+@font-face{font-family:Kanit;font-weight:400;src:url(fonts/Kanit-Regular.woff2) format("woff2")}
+@font-face{font-family:Kanit;font-weight:600;src:url(fonts/Kanit-SemiBold.woff2) format("woff2")}
+:root{--bg:#080e0b;--s:#121d17;--s2:#1b2a23;--line:#25382f;--ink:#e9f2ed;--mut:#8da398;--ac:#34d399;--acink:#04130c;--bad:#fca5a5;--warn:#fbbf24}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.5 Kanit,system-ui,sans-serif;padding:18px 16px 60px;max-width:760px;margin-inline:auto}
+h1{font-size:1.4rem;margin:6px 0 2px}
+p{color:var(--mut);margin:4px 0 14px}
+.card{background:var(--s);border-radius:16px;padding:14px;margin-bottom:14px;border:1px solid var(--line)}
+.card h2{margin:0 0 4px;font-size:1.05rem}
+.card small{color:var(--mut);display:block;margin-bottom:10px}
+label.btn,button.btn{display:flex;align-items:center;justify-content:center;gap:8px;height:50px;border-radius:25px;background:var(--ac);color:var(--acink);font:600 1rem Kanit,sans-serif;border:0;width:100%;cursor:pointer}
+button.btn.o{background:var(--s2);color:var(--ink);border:1px solid var(--line)}
+input[type=file]{display:none}
+pre{white-space:pre-wrap;word-break:break-word;background:#050a07;border-radius:12px;padding:12px;font:13px/1.55 ui-monospace,Menlo,monospace;margin:10px 0 0;color:#cfe9dc;max-height:340px;overflow:auto}
+.ok{color:var(--ac)}.bad{color:var(--bad)}.warn{color:var(--warn)}
+.row{display:flex;gap:8px}.row>*{flex:1}
+#sum{border-color:var(--ac)}
+</style>
 </head>
 <body>
-<div id="app"></div>
-<div id="layer"></div>
-<div id="toast" role="status" aria-live="polite"></div>
-<input type="file" id="fileCamera" accept="image/*" capture="environment" hidden>
-<input type="file" id="fileGallery" accept="image/*" hidden>
-<input type="file" id="fileImport" accept="application/json,.json" hidden>
-<script src="art-icons.js?v=2026-11-06-a"></script>
-<script src="art-catalog.js?v=2026-11-06-a"></script>
-<script src="app.js?v=2026-11-06-a"></script>
+<h1>ทดสอบนำเข้าโน้ตจาก iCloud</h1>
+<p>หน้านี้ไม่อัปโหลดอะไรออกจากเครื่อง ใช้แค่ดูว่า iPad ส่งไฟล์ให้เว็บได้แบบไหน กดทีละปุ่ม แล้วแคปหน้าจอผลส่งให้ผมดู</p>
+
+<div class="card"><h2>ทดสอบ 1: เลือกรูปหลายรูป</h2><small>เข้า iCloud Drive → โฟลเดอร์โน้ต → เลือกรูปหลายรูป (ลองเลือก 20–50 รูป)</small>
+<label class="btn">เลือกรูป<input id="f1" type="file" accept="image/*" multiple></label><pre id="o1">ยังไม่ได้ทดสอบ</pre></div>
+
+<div class="card"><h2>ทดสอบ 2: เลือกทั้งโฟลเดอร์</h2><small>ถ้า iPad ไม่ให้เลือกโฟลเดอร์ จะเห็นว่าเลือกไม่ได้ หรือได้ไฟล์ไม่ครบ ไม่เป็นไรครับ นี่คือสิ่งที่อยากรู้</small>
+<label class="btn o" style="background:var(--s2);color:var(--ink);border:1px solid var(--line)">เลือกโฟลเดอร์<input id="f2" type="file" webkitdirectory multiple></label><pre id="o2">ยังไม่ได้ทดสอบ</pre></div>
+
+<div class="card"><h2>ทดสอบ 3: เลือกไฟล์ ZIP</h2><small>ในแอปไฟล์ กดค้างโฟลเดอร์เพลง 5–10 โฟลเดอร์ → บีบอัด แล้วเลือกไฟล์ .zip ที่ได้ (ลองก้อนเล็กก่อน แล้วค่อยลองก้อนใหญ่)</small>
+<label class="btn">เลือกไฟล์ ZIP<input id="f3" type="file" accept=".zip,application/zip"></label><pre id="o3">ยังไม่ได้ทดสอบ</pre></div>
+
+<div class="card" id="sum"><h2>ที่เก็บในเครื่อง</h2><small>ดูว่า iPad ให้เว็บเก็บข้อมูลได้เท่าไร</small>
+<button class="btn o" id="bs">ตรวจพื้นที่</button><pre id="o4">ยังไม่ได้ตรวจ</pre></div>
+
+<script src="fflate.min.js"></script>
+<script>
+// remove leftovers of the previous app that lived at this address (offline cache + its service worker)
+(async () => {
+  try {
+    if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    if (window.caches) for (const k of await caches.keys()) if (/^stuff-finder/.test(k)) await caches.delete(k);
+  } catch (e) { /* nothing to clean */ }
+})();
+</script>
+<script>
+const $ = id => document.getElementById(id);
+const mb = n => (n / 1048576).toFixed(1) + ' MB';
+const ms = n => Math.round(n) + ' ms';
+const isImg = n => /\.(jpe?g|png|webp|heic|heif|gif)$/i.test(n);
+
+// resize like the real app will: long edge 1800, jpeg 0.82
+async function shrink(blob) {
+  const t0 = performance.now();
+  const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' });
+  const k = Math.min(1, 1800 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas'); c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.82));
+  const info = { from: `${bmp.width}×${bmp.height}`, to: `${c.width}×${c.height}`, inKB: Math.round(blob.size / 1024), outKB: Math.round(out.size / 1024), ms: performance.now() - t0 };
+  bmp.close?.(); return info;
+}
+
+async function benchmark(blobs, log, n = 8) {
+  const pick = blobs.slice(0, n); let tot = 0, outTot = 0, ok = 0, bad = 0;
+  for (const b of pick) { try { const i = await shrink(b); tot += i.ms; outTot += i.outKB; ok++; if (ok === 1) log(`ตัวอย่างรูปแรก: ${i.from} → ${i.to}, ${i.inKB} KB → ${i.outKB} KB`); } catch (e) { bad++; log(`<span class="bad">แปลงรูปไม่ได้: ${e.message || e}</span>`); } }
+  if (ok) log(`ย่อ ${ok} รูป เฉลี่ย ${ms(tot / ok)} ต่อรูป · หลังย่อเฉลี่ย ${Math.round(outTot / ok)} KB ต่อรูป`);
+  if (ok) log(`ประมาณการ 1,000 รูป: ใช้พื้นที่ราว ${mb((outTot / ok) * 1000 * 1024)} และใช้เวลาราว ${Math.round((tot / ok) * 1000 / 60000)} นาที`);
+  if (bad) log(`<span class="bad">แปลงไม่ได้ ${bad} รูป (อาจเป็นไฟล์ HEIC)</span>`);
+}
+
+const mk = el => { const lines = []; const log = s => { lines.push(s); el.innerHTML = lines.join('\n'); }; el.innerHTML = ''; return log; };
+
+$('f1').onchange = async e => {
+  const log = mk($('o1')); const fs = [...e.target.files]; if (!fs.length) return log('ไม่ได้เลือกไฟล์');
+  const t0 = performance.now();
+  log(`<span class="ok">ได้รับ ${fs.length} ไฟล์</span> รวม ${mb(fs.reduce((a, f) => a + f.size, 0))}`);
+  log('ตัวอย่างชื่อ: ' + fs.slice(0, 6).map(f => f.name).join(', '));
+  log('ชนิด: ' + [...new Set(fs.map(f => f.type || '(ไม่มี)'))].join(', '));
+  log('มีเส้นทางโฟลเดอร์ติดมาไหม: ' + (fs.some(f => f.webkitRelativePath) ? '<span class="ok">มี</span>' : '<span class="warn">ไม่มี (ได้แต่ชื่อไฟล์)</span>'));
+  try { await benchmark(fs.filter(f => isImg(f.name) || f.type.startsWith('image/')), log); } catch (er) { log(`<span class="bad">ผิดพลาด: ${er.message}</span>`); }
+  log(`รวมเวลา ${ms(performance.now() - t0)}`);
+};
+
+$('f2').onchange = async e => {
+  const log = mk($('o2')); const fs = [...e.target.files]; if (!fs.length) return log('ไม่ได้เลือกอะไร (iPad อาจไม่ให้เลือกโฟลเดอร์)');
+  log(`<span class="ok">ได้รับ ${fs.length} ไฟล์</span>`);
+  const paths = fs.map(f => f.webkitRelativePath || ''); const has = paths.filter(Boolean).length;
+  log('มีเส้นทางโฟลเดอร์ติดมา: ' + (has ? `<span class="ok">มี ${has} ไฟล์</span>` : '<span class="warn">ไม่มี</span>'));
+  if (has) { const dirs = new Set(paths.map(p => p.split('/').slice(0, -1).join('/'))); log(`จำนวนโฟลเดอร์ที่เห็น: ${dirs.size}`); log('ตัวอย่าง: ' + paths.slice(0, 5).join(' | ')); }
+  else log('ตัวอย่างชื่อ: ' + fs.slice(0, 6).map(f => f.name).join(', '));
+};
+
+$('f3').onchange = async e => {
+  const log = mk($('o3')); const f = e.target.files[0]; if (!f) return log('ไม่ได้เลือกไฟล์');
+  const t0 = performance.now();
+  log(`ไฟล์: ${f.name} · ${mb(f.size)}`);
+  try {
+    const buf = new Uint8Array(await f.arrayBuffer()); log(`อ่านเข้าหน่วยความจำได้ (${ms(performance.now() - t0)})`);
+    const t1 = performance.now(); const files = fflate.unzipSync(buf, { filter: x => !x.name.endsWith('/') && !/(^|\/)(__MACOSX|\.DS_Store)/.test(x.name) });
+    const names = Object.keys(files); const imgs = names.filter(isImg);
+    log(`<span class="ok">แตก ZIP ได้</span> ใช้ ${ms(performance.now() - t1)} · ไฟล์ทั้งหมด ${names.length} · รูป ${imgs.length}`);
+    const dirs = new Map(); for (const n of imgs) { const d = n.includes('/') ? n.split('/').slice(0, -1).join('/') : '(ไม่มีโฟลเดอร์)'; dirs.set(d, (dirs.get(d) || 0) + 1); }
+    log(`จำนวนกลุ่ม (โฟลเดอร์): ${dirs.size}`);
+    log('ตัวอย่างกลุ่ม: ' + [...dirs].slice(0, 6).map(([d, n]) => `${d.split('/').pop()} (${n} รูป)`).join(', '));
+    const blobs = imgs.slice(0, 8).map(n => new Blob([files[n]], { type: /png$/i.test(n) ? 'image/png' : 'image/jpeg' }));
+    await benchmark(blobs, log);
+    log(`รวมเวลา ${ms(performance.now() - t0)}`);
+  } catch (er) { log(`<span class="bad">แตก ZIP ไม่ได้: ${er.message || er}</span>`); log('ถ้า ZIP ใหญ่มาก อาจเป็นเพราะหน่วยความจำไม่พอ ลองก้อนเล็กลง'); }
+};
+
+$('bs').onclick = async () => {
+  const log = mk($('o4'));
+  log('แอปติดตั้งที่หน้าจอหลัก: ' + (matchMedia('(display-mode: standalone)').matches || navigator.standalone ? '<span class="ok">ใช่</span>' : '<span class="warn">ไม่ใช่ (เปิดในเบราว์เซอร์)</span>'));
+  try { const e = await navigator.storage.estimate(); log(`โควตาที่เว็บใช้ได้: ${mb(e.quota)} · ใช้ไปแล้ว: ${mb(e.usage)}`); } catch { log('<span class="warn">ตรวจโควตาไม่ได้</span>'); }
+  try { log('ขอไม่ให้ระบบล้างข้อมูลเอง: ' + ((await navigator.storage.persist()) ? '<span class="ok">ได้</span>' : '<span class="warn">ไม่ได้</span>')); } catch {}
+  try {
+    const db = await new Promise((res, rej) => { const r = indexedDB.open('sheet-test', 1); r.onupgradeneeded = () => r.result.createObjectStore('b'); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+    const blob = new Blob([new Uint8Array(20 * 1048576)]); const t0 = performance.now();
+    await new Promise((res, rej) => { const t = db.transaction('b', 'readwrite'); t.objectStore('b').put(blob, 'x'); t.oncomplete = res; t.onerror = () => rej(t.error); });
+    log(`<span class="ok">เขียนไฟล์ทดสอบ 20 MB ลงที่เก็บได้</span> (${ms(performance.now() - t0)})`);
+    await new Promise(res => { const t = db.transaction('b', 'readwrite'); t.objectStore('b').delete('x'); t.oncomplete = res; });
+    log('ลบไฟล์ทดสอบแล้ว');
+  } catch (er) { log(`<span class="bad">เขียนที่เก็บไม่ได้: ${er.message || er}</span>`); }
+  log(`เบราว์เซอร์: ${navigator.userAgent}`);
+};
+</script>
 </body>
 </html>
