@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-e';
+const BUILD = 'sheet-2026-11-15-f';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -79,7 +79,7 @@ function toast(msg, action) {
 function sheet(inner, { onclose } = {}) {
   const sc = document.createElement('div'); sc.className = 'scrim';
   sc.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${inner}</div>`;
-  const close = () => { sc.remove(); onclose?.(); };
+  const close = () => { sc.remove(); onclose?.(); if (typeof chromeArm === 'function') chromeArm(); };
   sc.addEventListener('pointerdown', e => { if (e.target === sc) close(); });
   $('#layer').append(sc);
   return { el: sc.firstChild, close, scrim: sc };
@@ -121,7 +121,7 @@ function addToQueue(id, where) {
 }
 function play(i) {
   if (i < 0 || i >= S.queue.length) return;
-  S.cur = i; S.page = 0; resetZoom(); saveState(); renderTop(); renderStrip(); showPage(); scrollToCur();
+  S.cur = i; S.page = 0; resetZoom(); saveState(); renderTop(); renderStrip(); showPage(); scrollToCur(); chromeArm();
 }
 function setQueueOrder(ids) { const curId = S.queue[S.cur]; S.queue = ids; S.cur = Math.max(0, ids.indexOf(curId)); saveState(); renderTop(); renderStrip(); }
 function removeFromQueue(i) {
@@ -202,12 +202,12 @@ function renderAll() { renderTop(); renderStrip(); showPage(); if (S.searching) 
 
 /* ───────────── search panel ───────────── */
 function openSearch() {
-  S.searching = true; S.q = ''; S.letter = ''; S.shown = 120;
+  S.searching = true; S.q = ''; S.letter = ''; S.shown = 120; $('#app').classList.remove('reading');
   $('#app').classList.add('searching');
   $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
   renderResults(); setLetterMode(false); $('#qi').focus();
 }
-function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); $('#panel').innerHTML = ''; document.activeElement?.blur?.(); showPage(); }
+function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); $('#panel').innerHTML = ''; document.activeElement?.blur?.(); showPage(); chromeArm(); }
 function setLetterMode(on) {
   S.letterMode = on; $('#letters').classList.toggle('hidden', !on); $('#lm').textContent = on ? '⌨' : 'ก–ฮ';
   if (on) { S.q = ''; $('#qi').value = ''; S.letter = ''; document.activeElement?.blur?.(); renderLetters(); renderResults(); } else { S.letter = ''; renderResults(); $('#qi').focus(); }
@@ -497,10 +497,11 @@ function openMenu() {
     <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
+    <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างซ่อนเองเมื่อไม่แตะ แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
     <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
 }
 
 function openRemoteTest() {
@@ -632,6 +633,16 @@ document.addEventListener('click', e => {
   const qc = e.target.closest('#qwrap .qc[data-i]'); if (qc && !justDragged($('#qwrap'))) play(+qc.dataset.i);
 });
 document.addEventListener('input', e => { if (e.target.id === 'qi') { S.q = e.target.value; S.shown = 120; renderResults(); } });
+/* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
+const FS = { on: (() => { try { return localStorage.getItem('sheet:fs') !== '0'; } catch { return true; } })(), t: 0 };
+function chromeArm() {
+  clearTimeout(FS.t); if (!FS.on) return;
+  FS.t = setTimeout(() => { if (!S.searching && !document.querySelector('#layer .scrim') && !document.querySelector('#strip.dragging') && curSong()) $('#app').classList.add('reading'); }, 3000);
+}
+function chromeShow() { $('#app').classList.remove('reading'); chromeArm(); }
+function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
+document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) chromeArm(); }, true);
+
 /* remote controls: Bluetooth page-turner pedals / keyboards (keys), rings with a scroll wheel (wheel) */
 const sheetOpen = () => !!document.querySelector('#layer .scrim');
 const typing = t => t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable);
@@ -654,8 +665,8 @@ document.addEventListener('wheel', e => {
 function turn(d, cross) {
   const song = curSong(); if (!song || S.searching && document.activeElement?.id === 'qi') return;
   const np = S.page + d;
-  if (np >= song.n) { if (cross && S.cur + 1 < S.queue.length) play(S.cur + 1); else if (cross) toast('จบคิวแล้ว'); return; }
-  if (np < 0) { if (cross && S.cur > 0) { play(S.cur - 1); const prev = curSong(); if (prev) { S.page = prev.n - 1; showPage(); } } return; }
+  if (np >= song.n) { if (cross && S.cur + 1 < S.queue.length) { play(S.cur + 1); toast('▶ ' + (curSong()?.name || '')); } else if (cross) toast('จบคิวแล้ว'); return; }
+  if (np < 0) { if (cross && S.cur > 0) { play(S.cur - 1); const prev = curSong(); if (prev) { S.page = prev.n - 1; showPage(); toast('▶ ' + prev.name); } } return; }
   S.page = np; Z.tx = 0; Z.ty = 0; applyZoom(); showPage(); // zoom level stays, view jumps to the top-left of the new page
 }
 // gestures on the score: swipe / edge tap = turn page; pinch = zoom; drag when zoomed = pan; double tap in the middle = zoom
@@ -688,6 +699,7 @@ function turn(d, cross) {
     const dx = pt.x - g.x0, dy = pt.y - g.y0, moved = Math.hypot(dx, dy), r = rel(), x = (pt.x - r.left) / r.width, cx = pt.x - r.left, cy = pt.y - r.top, quick = Date.now() - g.t < 600; g = null;
     if (Z.s === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) { turn(dx < 0 ? 1 : -1); return; }
     if (moved >= 12 || !quick) return;
+    if ($('#app').classList.contains('reading') && !e.target.closest?.('button') && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
     if (x > 0.68) { turn(1); lastTap = null; } else if (x < 0.32) { turn(-1); lastTap = null; }
     else { // middle: double tap zooms in / back out
       if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
@@ -696,6 +708,7 @@ function turn(d, cross) {
   };
   stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (!ptrs.size) g = null; });
   window.addEventListener('resize', () => { clampZ(); applyZoom(); });
+  new ResizeObserver(() => { clampZ(); applyZoom(); }).observe(stage);
 })();
 // stop the browser from zooming the whole page when pinching on the iPad
 for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, e => e.preventDefault());
@@ -722,7 +735,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
-  loadState(); renderAll();
+  loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   window.__sheet = { S, DB };
 })();
