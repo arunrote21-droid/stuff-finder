@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-f';
+const BUILD = 'sheet-2026-11-15-g';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -46,7 +46,7 @@ const DB = {
   allSets: () => DB.tx(['sets'], 'readonly', s => s.getAll()),
   page: (id, i) => DB.tx(['pages'], 'readonly', s => s.get(id + ':' + i)),
   putSong: (song, blobs) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + i)); }),
-  delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) ps.delete(song.id + ':' + i); }),
+  delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) { ps.delete(song.id + ':' + i); TH.del('bb:' + song.id + ':' + i); } }),
   putSongMeta: song => DB.tx(['songs'], 'readwrite', s => s.put(song)),
   putSet: set => DB.tx(['sets'], 'readwrite', s => s.put(set)),
   delSet: id => DB.tx(['sets'], 'readwrite', s => s.delete(id)),
@@ -135,9 +135,48 @@ function removeFromQueue(i) {
 
 /* ───────────── zoom (pinch, drag, double tap) ───────────── */
 const Z = { s: 1, tx: 0, ty: 0 };
+const CROP = { on: (() => { try { return localStorage.getItem('sheet:trim') !== '0'; } catch { return true; } })(), box: null };
+function cropBase() { // transform that shows only the inked area of the page, in stage coordinates
+  const b = CROP.on && CROP.box; if (!b) return '';
+  const r = $('#stage').getBoundingClientRect(), W = r.width, H = r.height; if (!W || !H) return '';
+  const f = Math.min(W / b.ar, H), dw = b.ar * f, dh = f, ox = (W - dw) / 2, oy = (H - dh) / 2;
+  const cx = ox + b.x0 * dw, cy = oy + b.y0 * dh, cw = (b.x1 - b.x0) * dw, ch = (b.y1 - b.y0) * dh;
+  const s0 = Math.min(W / cw, H / ch), tx = W / 2 - s0 * (cx + cw / 2), ty = H / 2 - s0 * (cy + ch / 2);
+  return `translate(${tx}px,${ty}px) scale(${s0})`;
+}
+const bbMem = new Map();
+async function inkBox(id, page) {
+  const key = 'bb:' + id + ':' + page; if (bbMem.has(key)) return bbMem.get(key);
+  let box = null, got = false;
+  try { const saved = await TH.get(key); if (saved !== undefined) { box = saved.none ? null : saved; got = true; } } catch { /* no store */ }
+  if (!got) {
+    try {
+      const blob = await DB.page(id, page); if (!blob) return null;
+      let bmp; try { bmp = await createImageBitmap(blob, { imageOrientation: 'from-image', resizeWidth: 360, resizeQuality: 'low' }); } catch { bmp = await createImageBitmap(blob); }
+      const w = Math.min(360, bmp.width), h = Math.max(1, Math.round(bmp.height * w / bmp.width)), c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(bmp, 0, 0, w, h); bmp.close?.();
+      const d = g.getImageData(0, 0, w, h).data, lum = new Uint8Array(w * h), hist = new Uint32Array(256);
+      for (let i = 0; i < w * h; i++) { const v = (d[i * 4] * 299 + d[i * 4 + 1] * 587 + d[i * 4 + 2] * 114) / 1000 | 0; lum[i] = v; hist[v]++; }
+      let acc = 0, bg = 255; for (let v = 0; v < 256; v++) { acc += hist[v]; if (acc >= w * h * 0.9) { bg = v; break; } }
+      const thr = Math.min(200, bg - 55), rows = new Uint16Array(h), cols = new Uint16Array(w);
+      if (thr > 40) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (lum[y * w + x] < thr) { rows[y]++; cols[x]++; }
+      const rMin = Math.max(3, w * 0.012), cMin = Math.max(3, h * 0.012);
+      let y0 = 0, y1 = h - 1, x0 = 0, x1 = w - 1;
+      while (y0 < h && rows[y0] < rMin) y0++; while (y1 > y0 && rows[y1] < rMin) y1--;
+      while (x0 < w && cols[x0] < cMin) x0++; while (x1 > x0 && cols[x1] < cMin) x1--;
+      const px = 0.025 * w, py = 0.025 * h; const nb = { x0: Math.max(0, x0 - px) / w, x1: Math.min(w, x1 + px) / w, y0: Math.max(0, y0 - py) / h, y1: Math.min(h, y1 + py) / h, ar: w / h };
+      const area = (nb.x1 - nb.x0) * (nb.y1 - nb.y0);
+      box = (thr > 40 && y0 < y1 && x0 < x1 && nb.x1 - nb.x0 > 0.35 && nb.y1 - nb.y0 > 0.35 && area < 0.96) ? nb : null;
+      TH.put(key, box || { none: true }).catch(() => {});
+    } catch { box = null; }
+  }
+  bbMem.set(key, box); if (bbMem.size > 300) bbMem.delete(bbMem.keys().next().value);
+  return box;
+}
 function applyZoom() {
   const img = $('#pg'); img.style.transformOrigin = '0 0';
-  img.style.transform = (Z.s === 1 && !Z.tx && !Z.ty) ? '' : `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`;
+  const base = cropBase(), z = (Z.s === 1 && !Z.tx && !Z.ty) ? '' : `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`;
+  img.style.transform = (z + ' ' + base).trim();
   $('#zoomBtn').textContent = Z.s > 1 ? '⤢' : '🔍';
 }
 function clampZ() {
@@ -176,7 +215,8 @@ async function showPage() {
   }
   empty.className = 'empty';
   S.page = Math.min(Math.max(0, S.page), song.n - 1);
-  const url = await pageUrl(song, S.page); if (tok !== pageToken) return;
+  const [url, box] = await Promise.all([pageUrl(song, S.page), CROP.on ? inkBox(song.id, S.page) : null]); if (tok !== pageToken) return;
+  CROP.box = box;
   if (url) img.src = url; else img.removeAttribute('src');
   applyZoom();
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
@@ -184,7 +224,7 @@ async function showPage() {
   const next = S.songs.get(S.queue[S.cur + 1]);
   const ns = $('#nextSong'); ns.hidden = !(next && S.page === song.n - 1); if (!ns.hidden) ns.textContent = `เพลงต่อไป: ${next.name} ▶`;
   saveState();
-  if (S.page + 1 < song.n) pageUrl(song, S.page + 1); else if (next) pageUrl(next, 0);
+  if (S.page + 1 < song.n) { pageUrl(song, S.page + 1); if (CROP.on) inkBox(song.id, S.page + 1); } else if (next) { pageUrl(next, 0); if (CROP.on) inkBox(next.id, 0); }
 }
 function renderTop() {
   const song = curSong();
@@ -498,10 +538,11 @@ function openMenu() {
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
     <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างซ่อนเองเมื่อไม่แตะ แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
+    <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
     <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, trim: toggleTrim, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
 }
 
 function openRemoteTest() {
@@ -640,6 +681,7 @@ function chromeArm() {
   FS.t = setTimeout(() => { if (!S.searching && !document.querySelector('#layer .scrim') && !document.querySelector('#strip.dragging') && curSong()) $('#app').classList.add('reading'); }, 3000);
 }
 function chromeShow() { $('#app').classList.remove('reading'); chromeArm(); }
+function toggleTrim() { CROP.on = !CROP.on; try { localStorage.setItem('sheet:trim', CROP.on ? '1' : '0'); } catch { /* private mode */ } if (!CROP.on) CROP.box = null; showPage(); toast(CROP.on ? 'ตัดขอบขาว: เปิด' : 'ตัดขอบขาว: ปิด'); }
 function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
 document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) chromeArm(); }, true);
 
@@ -737,6 +779,6 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   }
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-  window.__sheet = { S, DB };
+  window.__sheet = { S, DB, CROP, inkBox };
 })();
 })();
