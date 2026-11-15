@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-k';
+const BUILD = 'sheet-2026-11-15-l';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -679,12 +679,14 @@ document.addEventListener('input', e => { if (e.target.id === 'qi') { S.q = e.ta
 const FS = { on: (() => { try { return localStorage.getItem('sheet:fs') !== '0'; } catch { return true; } })(), t: 0 };
 function chromeArm() {
   clearTimeout(FS.t); if (!FS.on) return;
-  FS.t = setTimeout(() => { if (!S.searching && !document.querySelector('#layer .scrim') && !document.querySelector('#strip.dragging') && curSong()) $('#app').classList.add('reading'); }, 1500);
+  FS.t = setTimeout(() => { if (FS.hold || document.querySelector('#strip.dragging')) return chromeArm(); if (!S.searching && !document.querySelector('#layer .scrim') && curSong()) $('#app').classList.add('reading'); }, 1500);
 }
 function chromeShow() { $('#app').classList.remove('reading'); chromeArm(); }
 function toggleTrim() { CROP.on = !CROP.on; try { localStorage.setItem('sheet:trim', CROP.on ? '1' : '0'); } catch { /* private mode */ } if (!CROP.on) CROP.box = null; showPage(); toast(CROP.on ? 'ตัดขอบขาว: เปิด' : 'ตัดขอบขาว: ปิด'); }
 function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
-document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) chromeArm(); }, true);
+document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) { FS.hold = true; chromeArm(); } }, true);
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { if (FS.hold) { FS.hold = false; chromeArm(); } }, true));
+$('#qwrap').addEventListener('scroll', () => chromeArm(), { passive: true });
 
 /* remote controls: Bluetooth page-turner pedals / keyboards (keys), rings with a scroll wheel (wheel) */
 const sheetOpen = () => !!document.querySelector('#layer .scrim');
