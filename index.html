@@ -26,6 +26,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#050a07;border-radius:
 </head>
 <body>
 <h1>ทดสอบนำเข้าโน้ตจาก iCloud</h1>
+<div style="color:var(--mut);font-size:12px;margin-top:-2px">เวอร์ชันหน้านี้: 2</div>
 <p>หน้านี้ไม่อัปโหลดอะไรออกจากเครื่อง ใช้แค่ดูว่า iPad ส่งไฟล์ให้เว็บได้แบบไหน กดทีละปุ่ม แล้วแคปหน้าจอผลส่งให้ผมดู</p>
 
 <div class="card"><h2>ทดสอบ 1: เลือกรูปหลายรูป</h2><small>เข้า iCloud Drive → โฟลเดอร์โน้ต → เลือกรูปหลายรูป (ลองเลือก 20–50 รูป)</small>
@@ -35,7 +36,7 @@ pre{white-space:pre-wrap;word-break:break-word;background:#050a07;border-radius:
 <label class="btn o" style="background:var(--s2);color:var(--ink);border:1px solid var(--line)">เลือกโฟลเดอร์<input id="f2" type="file" webkitdirectory multiple></label><pre id="o2">ยังไม่ได้ทดสอบ</pre></div>
 
 <div class="card"><h2>ทดสอบ 3: เลือกไฟล์ ZIP</h2><small>ในแอปไฟล์ กดค้างโฟลเดอร์เพลง 5–10 โฟลเดอร์ → บีบอัด แล้วเลือกไฟล์ .zip ที่ได้ (ลองก้อนเล็กก่อน แล้วค่อยลองก้อนใหญ่)</small>
-<label class="btn">เลือกไฟล์ ZIP<input id="f3" type="file" accept=".zip,application/zip"></label><pre id="o3">ยังไม่ได้ทดสอบ</pre></div>
+<label class="btn">เลือกไฟล์ ZIP<input id="f3" type="file"></label><pre id="o3">ยังไม่ได้ทดสอบ</pre></div>
 
 <div class="card" id="sum"><h2>ที่เก็บในเครื่อง</h2><small>ดูว่า iPad ให้เว็บเก็บข้อมูลได้เท่าไร</small>
 <button class="btn o" id="bs">ตรวจพื้นที่</button><pre id="o4">ยังไม่ได้ตรวจ</pre></div>
@@ -78,6 +79,10 @@ async function benchmark(blobs, log, n = 8) {
 
 const mk = el => { const lines = []; const log = s => { lines.push(s); el.innerHTML = lines.join('\n'); }; el.innerHTML = ''; return log; };
 
+for (const [id, out] of [['f1', 'o1'], ['f2', 'o2'], ['f3', 'o3']]) {
+  $(id).addEventListener('click', () => { $(out).textContent = 'กดปุ่มแล้ว กำลังเปิดหน้าต่างเลือกไฟล์…'; });
+  $(id).addEventListener('cancel', () => { $(out).textContent = 'ยกเลิกการเลือก'; });
+}
 $('f1').onchange = async e => {
   const log = mk($('o1')); const fs = [...e.target.files]; if (!fs.length) return log('ไม่ได้เลือกไฟล์');
   const t0 = performance.now();
@@ -100,6 +105,7 @@ $('f2').onchange = async e => {
 
 $('f3').onchange = async e => {
   const log = mk($('o3')); const f = e.target.files[0]; if (!f) return log('ไม่ได้เลือกไฟล์');
+  if (!/\.zip$/i.test(f.name)) log(`<span class="warn">ไฟล์นี้ชื่อ ${f.name} ไม่ได้ลงท้าย .zip จะลองแตกให้ดูอยู่ดี</span>`);
   const t0 = performance.now();
   log(`ไฟล์: ${f.name} · ${mb(f.size)}`);
   try {
