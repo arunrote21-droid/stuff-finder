@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-i';
+const BUILD = 'sheet-2026-11-15-j';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -712,6 +712,19 @@ function turn(d, cross) {
   if (np < 0) { if (cross && S.cur > 0) { play(S.cur - 1); const prev = curSong(); if (prev) { S.page = prev.n - 1; showPage(); toast('▶ ' + prev.name); } } return; }
   S.page = np; if (Z.s > 1) zanim(); resetZoom(); showPage(); // a new page always starts fully zoomed out
 }
+// edge tap = turn the page; a second quick tap on the same edge jumps to the next / previous song instead
+let lastEdge = null;
+function edgeTap(side) {
+  const now = Date.now();
+  if (lastEdge && lastEdge.side === side && now - lastEdge.t < 330) {
+    const back = lastEdge; lastEdge = null;
+    const to = S.cur + side;
+    if (to < 0 || to >= S.queue.length) { S.page = back.page; Z.s = 1; Z.tx = Z.ty = 0; showPage(); toast(side > 0 ? 'จบคิวแล้ว' : 'เป็นเพลงแรกแล้ว'); return; }
+    play(to); toast('▶ ' + (curSong()?.name || '')); return;
+  }
+  lastEdge = { side, t: now, page: S.page };
+  turn(side);
+}
 // gestures on the score: swipe / edge tap = turn page; pinch = zoom; drag when zoomed = pan; double tap in the middle = zoom
 (() => {
   const stage = $('#stage'), ptrs = new Map(); let g = null, lastTap = null;
@@ -743,7 +756,7 @@ function turn(d, cross) {
     if (Z.s === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) { turn(dx < 0 ? 1 : -1); return; }
     if (moved >= 12 || !quick) return;
     if ($('#app').classList.contains('reading') && !e.target.closest?.('button') && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
-    if (x > 0.68) { turn(1); lastTap = null; } else if (x < 0.32) { turn(-1); lastTap = null; }
+    if (x > 0.68) { edgeTap(1); lastTap = null; } else if (x < 0.32) { edgeTap(-1); lastTap = null; }
     else { // middle: double tap zooms in / back out
       if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
       else lastTap = { t: Date.now(), x: cx, y: cy };
