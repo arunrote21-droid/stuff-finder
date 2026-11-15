@@ -182,3 +182,5 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 @media (max-width:699px){.panel{margin-left:0;margin-top:-8px}.searching .panel{margin-top:0}}
 #pg.zanim{transition:transform .32s cubic-bezier(.4,0,.2,1)}
 @media (prefers-reduced-motion:reduce){.stage,.panel,.main,#pg.zanim{transition:none!important}}
+/* "next song" button: small and in the middle of the bottom edge, away from the right corner */
+.nextsong{right:auto;left:50%;transform:translateX(-50%);bottom:18px;padding:4px 12px;font-size:.78rem;max-width:56%;opacity:.92}
