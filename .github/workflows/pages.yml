@@ -26,8 +26,8 @@ jobs:
       - name: Collect site files
         run: |
           mkdir _site
-          cp index.html _site/
-          cp ./*.js _site/
+          cp index.html style.css manifest.webmanifest _site/
+          cp ./*.js ./*.png _site/
           cp -r fonts _site/
       - uses: actions/upload-pages-artifact@v3
         with:
