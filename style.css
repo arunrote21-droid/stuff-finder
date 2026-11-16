@@ -199,3 +199,12 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .editing .main{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 .editing .stage{border-radius:0}
 @media (max-width:699px){#etb{flex-wrap:wrap;justify-content:center}}
+
+#esz{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(90px + env(safe-area-inset-bottom));z-index:31;width:min(420px,calc(100% - 24px));display:flex;align-items:center;gap:12px;padding:10px 14px;border-radius:20px;background:rgba(16,27,21,.97);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.5)}
+#esz[hidden]{display:none}
+#esz .ezp{flex:none;width:64px;height:64px;display:grid;place-items:center;background:#f7f3e9;border-radius:14px;overflow:hidden}
+#esz .ezp i{display:block;max-width:60px;max-height:60px}
+#esz input[type=range]{flex:1;min-width:0;accent-color:var(--ac);height:36px}
+#esz .ezq{display:flex;gap:6px;flex:none}
+#esz .ezq button{height:40px;padding:0 12px;border-radius:12px;background:var(--s2);color:var(--ink);font-weight:600;font-size:.82rem}
+#etb button{padding:0 10px}

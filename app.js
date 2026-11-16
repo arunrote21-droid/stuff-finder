@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-16-a';
+const BUILD = 'sheet-2026-11-16-b';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -724,6 +724,9 @@ document.addEventListener('input', e => { if (e.target.id === 'qi') { S.q = e.ta
 
 /* ───────────── annotations: finger drawing (pen / highlighter / eraser), kept per song page ───────────── */
 const ANN = { cache: new Map(), page: null, strokes: [], undo: [], redo: [], cur: null, tool: 'h', color: '#facc15', show: (() => { try { return localStorage.getItem('sheet:ann') !== '0'; } catch { return true; } })() };
+const ANN_RANGE = { p: [0.002, 0.012], h: [0.015, 0.06] };
+ANN.lvl = (() => { try { return Object.assign({ p: 30, h: 55 }, JSON.parse(localStorage.getItem('sheet:annsize') || '{}')); } catch { return { p: 30, h: 55 }; } })(); // 0..100 per tool
+const annW = t => ANN_RANGE[t][0] + (ANN_RANGE[t][1] - ANN_RANGE[t][0]) * (ANN.lvl[t] / 100);
 const ANN_COLORS = [['#ef4444', 'แดง'], ['#22c55e', 'เขียว'], ['#3b82f6', 'น้ำเงิน'], ['#facc15', 'เหลือง']];
 const annKey = (id, p) => `ann:${id}:${p}`;
 async function annLoad(id, page) {
@@ -753,8 +756,9 @@ function annRender() {
   sv.innerHTML = list.map(k => `<path d="${annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g)}" fill="none" stroke="${k.c}" stroke-width="${(k.w * g.dw).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${k.t === 'h' ? 0.45 : 1}"/>`).join('');
 }
 function annStart(e) {
+  const zz = $('#esz'); if (zz) zz.hidden = true;
   const p = annToNorm(e.clientX, e.clientY); if (!p) return false; ANN.before = [...ANN.strokes];
-  if (ANN.tool === 'e') { ANN.cur = { t: 'e' }; annErase(p); } else ANN.cur = { t: ANN.tool, c: ANN.color, w: ANN.tool === 'h' ? 0.034 : 0.0045, pts: [p[0], p[1]] };
+  if (ANN.tool === 'e') { ANN.cur = { t: 'e' }; annErase(p); } else ANN.cur = { t: ANN.tool, c: ANN.color, w: annW(ANN.tool), pts: [p[0], p[1]] };
   annRender(); return true;
 }
 function annErase(p) {
@@ -787,13 +791,20 @@ function annRedo() { if (!ANN.redo.length) return; ANN.undo.push(ANN.strokes); A
 async function annSetPage(song, page) { ANN.page = { id: song.id, page }; ANN.strokes = await annLoad(song.id, page); ANN.undo = []; ANN.redo = []; ANN.cur = null; }
 function buildEtb() {
   const t = document.createElement('div'); t.id = 'etb'; t.hidden = true;
-  t.innerHTML = `<div class="eg"><button data-e="tool" data-v="p">ปากกา</button><button data-e="tool" data-v="h">ไฮไลต์</button><button data-e="tool" data-v="e">ยางลบ</button></div>
+  t.innerHTML = `<div class="eg"><button data-e="tool" data-v="p">ปากกา</button><button data-e="tool" data-v="h">ไฮไลต์</button><button data-e="tool" data-v="e">ยางลบ</button><button data-e="size" aria-label="ขนาดเส้น">ขนาด</button></div>
     <div class="eg ec">${ANN_COLORS.map(([c, n]) => `<button data-e="color" data-v="${c}" aria-label="${n}" style="--c:${c}"></button>`).join('')}</div>
     <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
   $('#app').append(t);
+  const z = document.createElement('div'); z.id = 'esz'; z.hidden = true;
+  z.innerHTML = `<div class="ezp"><i id="ezd"></i></div><input id="ezr" type="range" min="0" max="100" step="1" aria-label="ขนาดเส้น"><div class="ezq"><button data-q="20">บาง</button><button data-q="50">กลาง</button><button data-q="85">หนา</button></div>`;
+  $('#app').append(z);
+  const setLvl = v => { ANN.lvl[ANN.tool] = Math.min(100, Math.max(0, +v)); try { localStorage.setItem('sheet:annsize', JSON.stringify(ANN.lvl)); } catch { /* private mode */ } etbPaint(); };
+  $('#ezr', z).addEventListener('input', e => setLvl(e.target.value));
+  z.addEventListener('click', e => { const q = e.target.closest('[data-q]'); if (q) setLvl(q.dataset.q); });
   t.addEventListener('click', async e => {
     const b = e.target.closest('[data-e]'); if (!b) return; const a = b.dataset.e;
-    if (a === 'tool') ANN.tool = b.dataset.v; else if (a === 'color') { ANN.color = b.dataset.v; if (ANN.tool === 'e') ANN.tool = 'h'; }
+    if (a === 'size') { if (ANN.tool !== 'e') $('#esz').hidden = !$('#esz').hidden; return etbPaint(); }
+    if (a === 'tool') { ANN.tool = b.dataset.v; $('#esz').hidden = true; } else if (a === 'color') { ANN.color = b.dataset.v; if (ANN.tool === 'e') ANN.tool = 'h'; }
     else if (a === 'undo') annUndo(); else if (a === 'redo') annRedo();
     else if (a === 'prev') turn(-1); else if (a === 'next') turn(1);
     else if (a === 'clear') { if (ANN.strokes.length && await confirmDel('ล้างรอยที่วาดทั้งหน้านี้?', 'รูปโน้ตไม่ถูกลบ ลบแค่รอยที่วาดไว้', 'ล้างรอย')) { ANN.undo.push(ANN.strokes); ANN.redo = []; ANN.strokes = []; annSave(); annRender(); } }
@@ -806,13 +817,19 @@ function etbPaint() {
   const t = $('#etb'); if (!t) return;
   t.querySelectorAll('[data-e=tool]').forEach(b => b.classList.toggle('on', b.dataset.v === ANN.tool));
   t.querySelectorAll('[data-e=color]').forEach(b => b.classList.toggle('on', b.dataset.v === ANN.color && ANN.tool !== 'e'));
+  const z = $('#esz'); if (z) {
+    if (ANN.tool === 'e') z.hidden = true;
+    t.querySelector('[data-e=size]').disabled = ANN.tool === 'e'; t.querySelector('[data-e=size]').classList.toggle('on', !z.hidden);
+    if (ANN.tool !== 'e') { $('#ezr', z).value = ANN.lvl[ANN.tool]; const d = $('#ezd', z), px = Math.max(3, annW(ANN.tool) * 560);
+    d.style.width = d.style.height = px + 'px'; d.style.background = ANN.color; d.style.opacity = ANN.tool === 'h' ? 0.55 : 1; d.style.borderRadius = ANN.tool === 'h' ? '999px' : '50%'; }
+  }
   t.querySelector('[data-e=undo]').disabled = !ANN.undo.length; t.querySelector('[data-e=redo]').disabled = !ANN.redo.length;
 }
 function enterEdit() {
   if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
   $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
 }
-function exitEdit() { S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
+function exitEdit() { $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
 function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); toast(ANN.show ? 'แสดงรอยที่วาด: เปิด' : 'แสดงรอยที่วาด: ปิด (ยังบันทึกไว้)'); }
 
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
