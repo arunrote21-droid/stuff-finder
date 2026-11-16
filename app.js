@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-15-p';
+const BUILD = 'sheet-2026-11-16-a';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -23,6 +23,7 @@ const TH = {
   put: (id, b) => TH.run('readwrite', s => s.put(b, id)),
   del: id => { TH.run('readwrite', s => s.delete(id)).catch(() => {}); },
   clear: () => { TH.run('readwrite', s => s.clear()).catch(() => {}); },
+  async prefix(p) { const d = await this.open(); return new Promise((res, rej) => { const out = [], t = d.transaction('t', 'readonly'), q = t.objectStore('t').openCursor(IDBKeyRange.bound(p, p + '\uffff')); q.onsuccess = () => { const c = q.result; if (c) { out.push([c.key, c.value]); c.continue(); } }; t.oncomplete = () => res(out); t.onerror = t.onabort = () => rej(t.error); }); },
 };
 const DB = {
   db: null,
@@ -46,7 +47,7 @@ const DB = {
   allSets: () => DB.tx(['sets'], 'readonly', s => s.getAll()),
   page: (id, i) => DB.tx(['pages'], 'readonly', s => s.get(id + ':' + i)),
   putSong: (song, blobs) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + i)); }),
-  delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) { ps.delete(song.id + ':' + i); TH.del('bb:' + song.id + ':' + i); } }),
+  delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) { ps.delete(song.id + ':' + i); TH.del('bb:' + song.id + ':' + i); TH.del('ann:' + song.id + ':' + i); } }),
   putSongMeta: song => DB.tx(['songs'], 'readwrite', s => s.put(song)),
   putSet: set => DB.tx(['sets'], 'readwrite', s => s.put(set)),
   delSet: id => DB.tx(['sets'], 'readwrite', s => s.delete(id)),
@@ -54,7 +55,7 @@ const DB = {
 };
 
 /* ───────────── state ───────────── */
-const S = { songs: new Map(), sets: [], queue: [], cur: 0, page: 0, zoom: 1, searching: false, q: '', letter: '', letterMode: false, shown: 120, setName: '' };
+const S = { edit: false, songs: new Map(), sets: [], queue: [], cur: 0, page: 0, zoom: 1, searching: false, q: '', letter: '', letterMode: false, shown: 120, setName: '' };
 const STATEKEY = 'sheet:state';
 const saveState = () => { try { localStorage.setItem(STATEKEY, JSON.stringify({ queue: S.queue, cur: S.cur, page: S.page, setName: S.setName })); } catch { /* storage blocked */ } };
 function loadState() {
@@ -136,14 +137,15 @@ function removeFromQueue(i) {
 /* ───────────── zoom (pinch, drag, double tap) ───────────── */
 const Z = { s: 1, tx: 0, ty: 0 };
 const CROP = { on: (() => { try { return localStorage.getItem('sheet:trim') !== '0'; } catch { return true; } })(), box: null };
-function cropBase() { // transform that shows only the inked area of the page, in stage coordinates
-  const b = CROP.on && CROP.box; if (!b) return '';
-  const r = $('#stage').getBoundingClientRect(), W = r.width, H = r.height; if (!W || !H) return '';
+function cropParams() { // the shift + scale that shows only the inked area of the page, in stage coordinates
+  const b = CROP.on && CROP.box; if (!b) return null;
+  const r = $('#stage').getBoundingClientRect(), W = r.width, H = r.height; if (!W || !H) return null;
   const f = Math.min(W / b.ar, H), dw = b.ar * f, dh = f, ox = (W - dw) / 2, oy = (H - dh) / 2;
   const cx = ox + b.x0 * dw, cy = oy + b.y0 * dh, cw = (b.x1 - b.x0) * dw, ch = (b.y1 - b.y0) * dh;
-  const s0 = Math.min(W / cw, H / ch), tx = W / 2 - s0 * (cx + cw / 2), ty = H / 2 - s0 * (cy + ch / 2);
-  return `translate(${tx}px,${ty}px) scale(${s0})`;
+  const s0 = Math.min(W / cw, H / ch);
+  return { s: s0, tx: W / 2 - s0 * (cx + cw / 2), ty: H / 2 - s0 * (cy + ch / 2) };
 }
+function cropBase() { const p = cropParams(); return p ? `translate(${p.tx}px,${p.ty}px) scale(${p.s})` : ''; }
 const bbMem = new Map();
 async function inkBox(id, page) {
   const key = 'bb:' + id + ':' + page; if (bbMem.has(key)) return bbMem.get(key);
@@ -177,6 +179,7 @@ function applyZoom() {
   const img = $('#pg'); img.style.transformOrigin = '0 0';
   const base = cropBase(), z = (Z.s === 1 && !Z.tx && !Z.ty) ? '' : `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`;
   img.style.transform = (z + ' ' + base).trim();
+  const sv = $('#annsvg'); if (sv) { sv.style.transformOrigin = '0 0'; sv.style.transform = img.style.transform; }
   $('#zoomBtn').textContent = Z.s > 1 ? '⤢' : '🔍';
 }
 function clampZ() {
@@ -217,9 +220,9 @@ async function showPage() {
   empty.className = 'empty';
   S.page = Math.min(Math.max(0, S.page), song.n - 1);
   const [url, box] = await Promise.all([pageUrl(song, S.page), CROP.on ? inkBox(song.id, S.page) : null]); if (tok !== pageToken) return;
-  CROP.box = box;
+  CROP.box = box; await annSetPage(song, S.page); if (tok !== pageToken) return;
   if (url) img.src = url; else img.removeAttribute('src');
-  applyZoom();
+  applyZoom(); annRender(); $('#editBtn').hidden = false;
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n > 1 && song.n <= 12 ? Array.from({ length: song.n }, (_, i) => `<i class="${i === S.page ? 'on' : ''}"></i>`).join('') : '';
   const next = S.songs.get(S.queue[S.cur + 1]);
@@ -231,7 +234,7 @@ function renderTop() {
   const song = curSong();
   $('#tSong').textContent = song ? song.name : 'โน้ตเนตร';
   $('#tSet').textContent = S.setName ? `ชุด: ${S.setName}` : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
-  if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; }
+  if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; $('#editBtn').hidden = true; }
 }
 function renderStrip() {
   $('#qn').textContent = S.queue.length;
@@ -445,7 +448,7 @@ function openImport() {
 }
 async function scanFiles(files, s) {
   const body = $('#impBody', s.el); body.innerHTML = '<p class="sub"><span class="spin"></span> กำลังอ่านรายการ…</p>';
-  const entries = [], skipped = [], zips = []; let setsJson = null;
+  const entries = [], skipped = [], zips = []; let setsJson = null, annJson = null;
   try {
     for (const f of files) {
       if (/\.zip$/i.test(f.name) || f.type.includes('zip')) {
@@ -454,6 +457,7 @@ async function scanFiles(files, s) {
           const parts = e.path.split('/'); const last = parts[parts.length - 1];
           if (!last || e.path.endsWith('/') || /(^|\/)(__MACOSX|\.DS_Store)(\/|$)/.test(e.path) || last.startsWith('.')) continue;
           if (last === '_ชุดเล่น.json') { setsJson = { f, e }; continue; }
+          if (last === '_รอยแก้ไข.json') { annJson = { f, e }; continue; }
           if (IMG_EXT.test(last)) entries.push({ path: e.path, file: f, entry: e }); else skipped.push(e.path);
         }
       } else if (IMG_EXT.test(f.name) || f.type.startsWith('image/')) entries.push({ path: nfc(f.name), file: f, entry: null });
@@ -468,7 +472,7 @@ async function scanFiles(files, s) {
   const existing = new Set([...S.songs.values()].map(x => nfc(x.name).toLowerCase()));
   const seen = new Map();
   rows.forEach(r => { const k = nfc(r.name).toLowerCase(); r.dup = existing.has(k); r.checked = !r.dup; const c = seen.get(k) || 0; seen.set(k, c + 1); if (c) { r.name += ` (${c + 1})`; } });
-  renderReview(s, { rows, skipped, quality: 'normal', setsJson });
+  renderReview(s, { rows, skipped, quality: 'normal', setsJson, annJson });
 }
 function renderReview(s, st) {
   const body = $('#impBody', s.el); const { rows, skipped } = st;
@@ -525,6 +529,16 @@ async function runImport(s, st) {
       for (const set of data) { if (S.sets.some(x => x.name === set.name)) continue; const ids = (set.songs || []).map(n => byName.get(nfc(n).toLowerCase())).filter(Boolean); const rec = { id: uid(), name: set.name, songs: ids }; await DB.putSet(rec); S.sets.push(rec); }
     } catch { /* sets are optional */ }
   }
+  if (st.annJson && !st.cancel) {
+    try {
+      const data = JSON.parse(new TextDecoder().decode(await readEntry(st.annJson.f, st.annJson.e)));
+      const byName = new Map([...S.songs.values()].map(x => [nfc(x.name).toLowerCase(), x]));
+      for (const it of data) {
+        const song = byName.get(nfc(it.song || '').toLowerCase()); if (!song || !(it.page >= 0 && it.page < song.n) || !Array.isArray(it.strokes) || !it.strokes.length) continue;
+        const k = annKey(song.id, it.page); if (!(ANN.cache.get(k)?.length) && !(await TH.get(k))?.strokes?.length) { await TH.put(k, { v: 1, strokes: it.strokes }); ANN.cache.delete(k); }
+      }
+    } catch { /* drawings are optional */ }
+  }
   s.close(); renderAll(); if (S.searching) renderResults();
   toast(st.cancel ? `หยุดแล้ว นำเข้าได้ ${songs} เพลง` : failed.length ? `นำเข้า ${songs} เพลง · ผิดพลาด ${failed.length} (ดูในเมนู ข้อมูล)` : `นำเข้าสำเร็จ ${songs} เพลง`);
   if (failed.length) console.warn('import failed', failed);
@@ -540,10 +554,11 @@ function openMenu() {
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
     <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างซ่อนเองเมื่อไม่แตะ แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
     <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
+    <button data-m="ann"><span class="ic">✎</span><span>แสดงรอยที่วาดบนโน้ต<small>${ANN.show ? 'เปิดอยู่ (กดปุ่ม ✎ ด้านบนเพื่อวาด)' : 'ปิดอยู่ ยังบันทึกรอยไว้'}</small></span></button>
     <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, trim: toggleTrim, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
 }
 
 function openRemoteTest() {
@@ -628,6 +643,11 @@ async function doBackup() {
     }
     const sj = new fflate.ZipPassThrough('_ชุดเล่น.json'); zip.add(sj);
     sj.push(new TextEncoder().encode(JSON.stringify(S.sets.map(x => ({ name: x.name, songs: x.songs.map(id => S.songs.get(id)?.name).filter(Boolean) })))), true);
+    try { // drawings, matched back to songs by name when restored
+      const names = new Map([...S.songs.values()].map(x => [x.id, x.name])), items = [];
+      for (const [k, v] of await TH.prefix('ann:')) { const [, id, pg] = k.split(':'); if (names.has(id) && v && v.strokes && v.strokes.length) items.push({ song: names.get(id), page: +pg, strokes: v.strokes }); }
+      if (items.length) { const aj = new fflate.ZipPassThrough('_รอยแก้ไข.json'); zip.add(aj); aj.push(new TextEncoder().encode(JSON.stringify(items)), true); }
+    } catch { /* drawings are optional */ }
     zip.end();
     const blob = new Blob(chunks, { type: 'application/zip' }); s.close();
     offerBackupFile(blob, fileName);
@@ -692,6 +712,7 @@ const ACT = {
   addnext: (d, el) => addFromRow(el, 'next', false),
   addend: (d, el) => addFromRow(el, 'end', false),
   nextsong: () => play(S.cur + 1),
+  edit: () => enterEdit(),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
 document.addEventListener('click', e => {
@@ -700,13 +721,107 @@ document.addEventListener('click', e => {
   const qc = e.target.closest('#qwrap .qc[data-i]'); if (qc && !justDragged($('#qwrap'))) play(+qc.dataset.i);
 });
 document.addEventListener('input', e => { if (e.target.id === 'qi') { S.q = e.target.value; S.shown = 120; renderResults(); } });
+
+/* ───────────── annotations: finger drawing (pen / highlighter / eraser), kept per song page ───────────── */
+const ANN = { cache: new Map(), page: null, strokes: [], undo: [], redo: [], cur: null, tool: 'h', color: '#facc15', show: (() => { try { return localStorage.getItem('sheet:ann') !== '0'; } catch { return true; } })() };
+const ANN_COLORS = [['#ef4444', 'แดง'], ['#22c55e', 'เขียว'], ['#3b82f6', 'น้ำเงิน'], ['#facc15', 'เหลือง']];
+const annKey = (id, p) => `ann:${id}:${p}`;
+async function annLoad(id, page) {
+  const k = annKey(id, page); if (ANN.cache.has(k)) return ANN.cache.get(k);
+  let v = []; try { const r = await TH.get(k); if (r && Array.isArray(r.strokes)) v = r.strokes; } catch { /* none yet */ }
+  ANN.cache.set(k, v); return v;
+}
+function annSave() {
+  const p = ANN.page; if (!p) return; const k = annKey(p.id, p.page); ANN.cache.set(k, ANN.strokes);
+  (ANN.strokes.length ? TH.put(k, { v: 1, strokes: ANN.strokes }) : TH.run('readwrite', st => st.delete(k))).catch(() => toast('บันทึกรอยที่วาดไม่สำเร็จ'));
+}
+function pageGeom() {
+  const img = $('#pg'); if (!img.naturalWidth) return null;
+  const r = $('#stage').getBoundingClientRect(), W = r.width, H = r.height, ar = img.naturalWidth / img.naturalHeight, f = Math.min(W / ar, H);
+  return { W, H, ar, dw: ar * f, dh: f, ox: (W - ar * f) / 2, oy: (H - f) / 2, r };
+}
+function annToNorm(cx, cy) {
+  const g = pageGeom(); if (!g) return null; let x = cx - g.r.left, y = cy - g.r.top;
+  x = (x - Z.tx) / Z.s; y = (y - Z.ty) / Z.s; const b = cropParams(); if (b) { x = (x - b.tx) / b.s; y = (y - b.ty) / b.s; }
+  return [Math.min(1, Math.max(0, (x - g.ox) / g.dw)), Math.min(1, Math.max(0, (y - g.oy) / g.dh))];
+}
+function annPathD(pts, g) { let d = ''; for (let i = 0; i < pts.length; i += 2) d += (i ? 'L' : 'M') + (g.ox + pts[i] * g.dw).toFixed(1) + ' ' + (g.oy + pts[i + 1] * g.dh).toFixed(1); return d; }
+function annRender() {
+  const sv = $('#annsvg'); if (!sv) return; const g = pageGeom(), list = ANN.cur && ANN.cur.t !== 'e' ? [...ANN.strokes, ANN.cur] : ANN.strokes;
+  sv.style.display = (ANN.show || S.edit) && g && list.length ? '' : 'none'; if (!g || !list.length) { sv.innerHTML = ''; return; }
+  sv.setAttribute('width', g.W); sv.setAttribute('height', g.H);
+  sv.innerHTML = list.map(k => `<path d="${annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g)}" fill="none" stroke="${k.c}" stroke-width="${(k.w * g.dw).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${k.t === 'h' ? 0.45 : 1}"/>`).join('');
+}
+function annStart(e) {
+  const p = annToNorm(e.clientX, e.clientY); if (!p) return false; ANN.before = [...ANN.strokes];
+  if (ANN.tool === 'e') { ANN.cur = { t: 'e' }; annErase(p); } else ANN.cur = { t: ANN.tool, c: ANN.color, w: ANN.tool === 'h' ? 0.034 : 0.0045, pts: [p[0], p[1]] };
+  annRender(); return true;
+}
+function annErase(p) {
+  const g = pageGeom(); if (!g) return; const n = ANN.strokes.length;
+  ANN.strokes = ANN.strokes.filter(k => { for (let i = 0; i < k.pts.length; i += 2) if (Math.hypot((k.pts[i] - p[0]) * g.ar, k.pts[i + 1] - p[1]) < 0.035) return false; return true; });
+  if (ANN.strokes.length !== n) annRender();
+}
+function annMove(e) {
+  if (!ANN.cur) return; const p = annToNorm(e.clientX, e.clientY); if (!p) return;
+  if (ANN.cur.t === 'e') return annErase(p);
+  const k = ANN.cur, lx = k.pts[k.pts.length - 2], ly = k.pts[k.pts.length - 1]; if (Math.hypot(p[0] - lx, p[1] - ly) < 0.0012) return;
+  k.pts.push(p[0], p[1]); annRender();
+}
+function annEnd() {
+  const k = ANN.cur; ANN.cur = null; if (!k) return;
+  if (k.t === 'h' && k.pts.length < 4) { annRender(); return; } // a plain tap never leaves a highlight blob
+  if (k.t !== 'e') {
+    if (k.t === 'h' && k.pts.length >= 6) { // a roughly horizontal swipe becomes a neat straight highlight
+      const xs = k.pts.filter((_, i) => i % 2 === 0), ys = k.pts.filter((_, i) => i % 2 === 1), w = Math.max(...xs) - Math.min(...xs), hgt = Math.max(...ys) - Math.min(...ys);
+      if (w > 0.04 && hgt * 1.0 < w * 0.45 * 1.0 && hgt < 0.03) { const y = ys.reduce((a, b) => a + b, 0) / ys.length; k.pts = [Math.min(xs[0], xs[xs.length - 1]), y, Math.max(xs[0], xs[xs.length - 1]), y]; }
+    }
+    ANN.strokes = [...ANN.strokes, k];
+  }
+  if (ANN.strokes.length !== ANN.before.length || ANN.strokes.some((x, i) => x !== ANN.before[i])) { ANN.undo.push(ANN.before); ANN.redo = []; annSave(); }
+  annRender(); etbPaint();
+}
+function annCancel() { if (!ANN.cur) return; ANN.cur = null; ANN.strokes = ANN.before || ANN.strokes; annRender(); }
+function annUndo() { if (!ANN.undo.length) return; ANN.redo.push(ANN.strokes); ANN.strokes = ANN.undo.pop(); annSave(); annRender(); etbPaint(); }
+function annRedo() { if (!ANN.redo.length) return; ANN.undo.push(ANN.strokes); ANN.strokes = ANN.redo.pop(); annSave(); annRender(); etbPaint(); }
+async function annSetPage(song, page) { ANN.page = { id: song.id, page }; ANN.strokes = await annLoad(song.id, page); ANN.undo = []; ANN.redo = []; ANN.cur = null; }
+function buildEtb() {
+  const t = document.createElement('div'); t.id = 'etb'; t.hidden = true;
+  t.innerHTML = `<div class="eg"><button data-e="tool" data-v="p">ปากกา</button><button data-e="tool" data-v="h">ไฮไลต์</button><button data-e="tool" data-v="e">ยางลบ</button></div>
+    <div class="eg ec">${ANN_COLORS.map(([c, n]) => `<button data-e="color" data-v="${c}" aria-label="${n}" style="--c:${c}"></button>`).join('')}</div>
+    <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
+  $('#app').append(t);
+  t.addEventListener('click', async e => {
+    const b = e.target.closest('[data-e]'); if (!b) return; const a = b.dataset.e;
+    if (a === 'tool') ANN.tool = b.dataset.v; else if (a === 'color') { ANN.color = b.dataset.v; if (ANN.tool === 'e') ANN.tool = 'h'; }
+    else if (a === 'undo') annUndo(); else if (a === 'redo') annRedo();
+    else if (a === 'prev') turn(-1); else if (a === 'next') turn(1);
+    else if (a === 'clear') { if (ANN.strokes.length && await confirmDel('ล้างรอยที่วาดทั้งหน้านี้?', 'รูปโน้ตไม่ถูกลบ ลบแค่รอยที่วาดไว้', 'ล้างรอย')) { ANN.undo.push(ANN.strokes); ANN.redo = []; ANN.strokes = []; annSave(); annRender(); } }
+    else if (a === 'done') exitEdit();
+    etbPaint();
+  });
+  etbPaint();
+}
+function etbPaint() {
+  const t = $('#etb'); if (!t) return;
+  t.querySelectorAll('[data-e=tool]').forEach(b => b.classList.toggle('on', b.dataset.v === ANN.tool));
+  t.querySelectorAll('[data-e=color]').forEach(b => b.classList.toggle('on', b.dataset.v === ANN.color && ANN.tool !== 'e'));
+  t.querySelector('[data-e=undo]').disabled = !ANN.undo.length; t.querySelector('[data-e=redo]').disabled = !ANN.redo.length;
+}
+function enterEdit() {
+  if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
+  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
+}
+function exitEdit() { S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
+function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); toast(ANN.show ? 'แสดงรอยที่วาด: เปิด' : 'แสดงรอยที่วาด: ปิด (ยังบันทึกไว้)'); }
+
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
 const FS = { on: (() => { try { return localStorage.getItem('sheet:fs') !== '0'; } catch { return true; } })(), t: 0 };
 function chromeArm() {
   clearTimeout(FS.t); if (!FS.on) return;
-  FS.t = setTimeout(() => { if (FS.hold || document.querySelector('#strip.dragging')) return chromeArm(); if (!S.searching && !document.querySelector('#layer .scrim') && curSong()) $('#app').classList.add('reading'); }, 1500);
+  FS.t = setTimeout(() => { if (S.edit) return; if (FS.hold || document.querySelector('#strip.dragging')) return chromeArm(); if (!S.searching && !document.querySelector('#layer .scrim') && curSong()) $('#app').classList.add('reading'); }, 1500);
 }
-function chromeShow() { $('#app').classList.remove('reading'); chromeArm(); }
+function chromeShow() { if (S.edit) return; $('#app').classList.remove('reading'); chromeArm(); }
 function toggleTrim() { CROP.on = !CROP.on; try { localStorage.setItem('sheet:trim', CROP.on ? '1' : '0'); } catch { /* private mode */ } if (!CROP.on) CROP.box = null; showPage(); toast(CROP.on ? 'ตัดขอบขาว: เปิด' : 'ตัดขอบขาว: ปิด'); }
 function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
 document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) { FS.hold = true; chromeArm(); } }, true);
@@ -763,12 +878,15 @@ function edgeTap(side) {
   stage.addEventListener('pointerdown', e => {
     if (e.target.closest('button')) return;
     try { stage.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (S.edit && ptrs.size === 0) { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); g = annStart(e) ? { mode: 'draw' } : null; return; }
+    if (S.edit && ptrs.size === 1) annCancel();
     ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (ptrs.size === 2) { const m = mid(); g = { mode: 'pinch', d: m.d, mx: m.x, my: m.y }; }
     else if (ptrs.size === 1) g = { mode: 'one', x0: e.clientX, y0: e.clientY, tx0: Z.tx, ty0: Z.ty, t: Date.now(), moved: false };
   });
   stage.addEventListener('pointermove', e => {
     if (!ptrs.has(e.pointerId) || !g) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (g.mode === 'draw') { annMove(e); return; }
     if (g.mode === 'pinch' && ptrs.size >= 2) {
       const m = mid(); zoomAt(Math.min(5, Math.max(1, Z.s * m.d / g.d)), m.x, m.y);
       Z.tx += m.x - g.mx; Z.ty += m.y - g.my; clampZ(); applyZoom(); g.d = m.d; g.mx = m.x; g.my = m.y; g.moved = true;
@@ -780,8 +898,10 @@ function edgeTap(side) {
   const up = e => {
     if (!ptrs.has(e.pointerId)) return; const pt = ptrs.get(e.pointerId); ptrs.delete(e.pointerId);
     if (!g) return;
+    if (g.mode === 'draw') { annEnd(); g = null; return; }
     if (g.mode === 'pinch') { if (ptrs.size < 2) { const [rest] = [...ptrs.values()]; g = rest ? { mode: 'one', x0: rest.x, y0: rest.y, tx0: Z.tx, ty0: Z.ty, t: Date.now(), moved: true, ignore: true } : null; } return; }
     if (g.ignore) { g = null; return; } // the finger left over after a pinch is not a tap
+    if (S.edit) { g = null; return; }
     const dx = pt.x - g.x0, dy = pt.y - g.y0, moved = Math.hypot(dx, dy), r = rel(), x = (pt.x - r.left) / r.width, cx = pt.x - r.left, cy = pt.y - r.top, quick = Date.now() - g.t < 600; g = null;
     if (Z.s === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) { turn(dx < 0 ? 1 : -1); return; }
     if (moved >= 12 || !quick) return;
@@ -801,7 +921,7 @@ function edgeTap(side) {
   };
   stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (!ptrs.size) g = null; });
   window.addEventListener('resize', () => { clampZ(); applyZoom(); });
-  new ResizeObserver(() => { clampZ(); applyZoom(); }).observe(stage);
+  new ResizeObserver(() => { clampZ(); applyZoom(); annRender(); }).observe(stage);
 })();
 // stop the browser from zooming the whole page when pinching on the iPad
 for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, e => e.preventDefault());
@@ -828,8 +948,9 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); $('#pg').addEventListener('load', annRender); buildEtb(); }
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-  window.__sheet = { S, DB, CROP, inkBox };
+  window.__sheet = { S, DB, CROP, inkBox, ANN };
 })();
 })();
