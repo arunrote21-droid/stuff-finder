@@ -208,3 +208,11 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #esz .ezq{display:flex;gap:6px;flex:none}
 #esz .ezq button{height:40px;padding:0 12px;border-radius:12px;background:var(--s2);color:var(--ink);font-weight:600;font-size:.82rem}
 #etb button{padding:0 10px}
+
+.pills{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.pills button{height:38px;padding:0 14px;border-radius:19px;background:var(--s2);border:1px solid var(--line);font-weight:600}
+.pills button.on{background:var(--ac);color:var(--acink);border-color:transparent}
+.bklist{display:flex;flex-direction:column;gap:6px;margin-top:10px;max-height:34vh;overflow:auto}
+.bklist[hidden]{display:none}
+.bkrow{display:flex;align-items:center;gap:8px;background:var(--s2);border-radius:12px;padding:6px 8px 6px 12px;font-size:.82rem}
+.bkrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-16-c';
+const BUILD = 'sheet-2026-11-16-d';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -621,65 +621,92 @@ function openManage() {
     const d = e.target.closest('[data-del]'); if (d) { const x = S.songs.get(d.dataset.del); if (await confirmDel(`ลบ “${x.name}”?`, 'ลบรูปโน้ตเพลงนี้ออกจากเครื่อง (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); paint(); renderAll(); } }
   });
 }
+/* backup: split into parts (so memory stays small), then one share sheet for all parts */
+function askBackupName(info, stamp) {
+  return new Promise(res => {
+    const s = sheet(`<h3>สำรองข้อมูล</h3><p class="sub">${esc(info)}</p>
+      <input class="field" id="bkn" value="สำรองโน้ตเนตร-${stamp}" maxlength="80" aria-label="ชื่อไฟล์">
+      <p class="sub" style="margin:10px 0 6px">แบ่งไฟล์ส่วนละ (ถ้าเครื่องหน่วยความจำน้อยให้เลือกเล็กลง)</p>
+      <div class="pills" id="bkz">${[50, 100, 150, 250].map(v => `<button data-z="${v}" class="${v === 100 ? 'on' : ''}">${v} MB</button>`).join('')}</div>
+      <div class="row2"><button class="btn o" data-v="0">ยกเลิก</button><button class="btn" data-v="1">สร้างไฟล์</button></div>`);
+    let mb = 100, done = false; const fin = v => { if (done) return; done = true; s.close(); res(v); };
+    s.el.addEventListener('click', e => {
+      const z = e.target.closest('[data-z]'); if (z) { mb = +z.dataset.z; s.el.querySelectorAll('[data-z]').forEach(b => b.classList.toggle('on', b === z)); return; }
+      const b = e.target.closest('[data-v]'); if (b) fin(b.dataset.v === '1' ? { name: ($('#bkn', s.el).value.trim() || `สำรองโน้ตเนตร-${stamp}`), mb } : null);
+    });
+  });
+}
 async function doBackup() {
   if (!S.songs.size) return toast('ยังไม่มีเพลงให้สำรอง');
   const d = new Date(), stamp = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
   const pages = [...S.songs.values()].reduce((a, x) => a + x.n, 0), approx = [...S.songs.values()].reduce((a, x) => a + (x.bytes || 0), 0);
-  const picked = await askText({ title: `ตั้งชื่อไฟล์สำรอง (${S.songs.size} เพลง · ${pages} หน้า · ราว ${(approx / 1048576).toFixed(0)} MB)`, value: `สำรองโน้ตเนตร-${stamp}`, ok: 'สร้างไฟล์' });
-  if (!picked) return;
-  const fileName = picked.replace(/[\/\\:*?"<>|]/g, '‐').replace(/\.zip$/i, '').trim() + '.zip';
+  const pick = await askBackupName(`${S.songs.size} เพลง · ${pages} หน้า · ราว ${(approx / 1048576).toFixed(0)} MB`, stamp);
+  if (!pick) return;
+  const base = pick.name.replace(/[\/\\:*?"<>|]/g, '‐').replace(/\.zip$/i, '').trim(), limit = pick.mb * 1048576;
   const s = sheet(`<h3>กำลังสำรองข้อมูล</h3><p class="sub" id="bt">เตรียมไฟล์…</p><div class="bar"><i id="bb"></i></div>`);
+  const parts = [];
   try {
-    const chunks = []; const zip = new fflate.Zip((err, d2) => { if (err) throw err; chunks.push(d2); });
-    const used = new Set(); let i = 0;
+    let chunks = [], zip = null, size = 0, i = 0; const used = new Set();
+    const open = () => { chunks = []; zip = new fflate.Zip((err, c) => { if (err) throw err; chunks.push(c); }); size = 0; };
+    const close = () => { zip.end(); parts.push(new Blob(chunks, { type: 'application/zip' })); chunks = []; zip = null; };
+    const addFile = (name, bytes) => { const f = new fflate.ZipPassThrough(name); zip.add(f); f.push(bytes, true); size += bytes.length; };
     for (const song of [...S.songs.values()].sort((a, b) => collator.compare(a.name, b.name))) {
+      if (!zip) open();
       let folder = song.name.replace(/[\/\\:*?"<>|]/g, '‐'); while (used.has(folder.toLowerCase())) folder += '_'; used.add(folder.toLowerCase());
-      for (let p = 0; p < song.n; p++) {
-        const blob = await DB.page(song.id, p); const f = new fflate.ZipPassThrough(`${folder}/${String(p + 1).padStart(3, '0')}.jpg`); zip.add(f);
-        f.push(new Uint8Array(await blob.arrayBuffer()), true);
-      }
-      i++; $('#bb', s.el).style.width = (i / S.songs.size * 100) + '%'; $('#bt', s.el).textContent = `รวมไฟล์ ${i}/${S.songs.size} เพลง`;
-      if (i % 20 === 0) await sleep(0);
+      for (let p = 0; p < song.n; p++) { const blob = await DB.page(song.id, p); addFile(`${folder}/${String(p + 1).padStart(3, '0')}.jpg`, new Uint8Array(await blob.arrayBuffer())); }
+      i++; $('#bb', s.el).style.width = (i / S.songs.size * 100) + '%'; $('#bt', s.el).textContent = `ส่วนที่ ${parts.length + 1} · รวมไฟล์ ${i}/${S.songs.size} เพลง`;
+      if (size >= limit) close();
+      if (i % 10 === 0) await sleep(0);
     }
-    const sj = new fflate.ZipPassThrough('_ชุดเล่น.json'); zip.add(sj);
-    sj.push(new TextEncoder().encode(JSON.stringify(S.sets.map(x => ({ name: x.name, songs: x.songs.map(id => S.songs.get(id)?.name).filter(Boolean) })))), true);
+    if (!zip) open();
+    addFile('_ชุดเล่น.json', new TextEncoder().encode(JSON.stringify(S.sets.map(x => ({ name: x.name, songs: x.songs.map(id => S.songs.get(id)?.name).filter(Boolean) })))));
     try { // drawings, matched back to songs by name when restored
       const names = new Map([...S.songs.values()].map(x => [x.id, x.name])), items = [];
       for (const [k, v] of await TH.prefix('ann:')) { const [, id, pg] = k.split(':'); if (names.has(id) && v && v.strokes && v.strokes.length) items.push({ song: names.get(id), page: +pg, strokes: v.strokes }); }
-      if (items.length) { const aj = new fflate.ZipPassThrough('_รอยแก้ไข.json'); zip.add(aj); aj.push(new TextEncoder().encode(JSON.stringify(items)), true); }
+      if (items.length) addFile('_รอยแก้ไข.json', new TextEncoder().encode(JSON.stringify(items)));
     } catch { /* drawings are optional */ }
-    zip.end();
-    const blob = new Blob(chunks, { type: 'application/zip' }); s.close();
-    offerBackupFile(blob, fileName);
+    close(); s.close();
+    const n = parts.length, files = parts.map((b, k) => new File([b], n === 1 ? `${base}.zip` : `${base}-ส่วน${k + 1}จาก${n}.zip`, { type: 'application/zip' }));
+    offerBackupFiles(files);
   } catch (err) { s.close(); toast('สำรองไม่สำเร็จ: ' + (err.message || err)); }
 }
-/* the file is ready: the person taps a button (a fresh tap is needed for the iOS share sheet) */
-function offerBackupFile(blob, fileName) {
-  // some iPads say "cannot share a ZIP" for one file type but accept another, so try a few types and still offer the button
-  const types = ['application/zip', 'application/octet-stream', ''], files = types.map(t => new File([blob], fileName, t ? { type: t } : {}));
-  const hasShare = typeof navigator.share === 'function', canPick = typeof window.showSaveFilePicker === 'function';
-  const okIdx = hasShare && navigator.canShare ? files.findIndex(f => { try { return navigator.canShare({ files: [f] }); } catch { return false; } }) : -1;
-  const s = sheet(`<h3>ไฟล์สำรองพร้อมแล้ว</h3><p class="sub"><b>${esc(fileName)}</b><br>ขนาด ${(blob.size / 1048576).toFixed(1)} MB</p>
-    <div class="imp">${hasShare ? '<button class="btn" id="bkShare">บันทึกไปที่ไฟล์ / แชร์</button>' : ''}${canPick ? '<button class="btn" id="bkPick">เลือกที่บันทึก…</button>' : ''}<button class="btn ${hasShare || canPick ? 'o' : ''}" id="bkDl">ดาวน์โหลด</button><button class="btn o" id="bkClose">ปิด</button></div>
-    <p class="sub" style="margin-top:10px">${hasShare ? 'ในหน้าต่างที่ขึ้นมา เลือก “บันทึกไปที่ไฟล์” แล้วเลือกโฟลเดอร์ (เช่น iCloud Drive) หรือเลือก AirDrop เพื่อส่งไปอีกเครื่อง' : 'เครื่องนี้ไม่มีหน้าต่างแชร์ ไฟล์จะอยู่ในโฟลเดอร์ดาวน์โหลดของเครื่อง'}${hasShare && okIdx < 0 ? '<br>(เครื่องไม่แจ้งว่ารองรับไฟล์ ZIP แต่ลองเปิดให้ได้ ถ้าไม่ขึ้นให้กด “ดาวน์โหลด”)' : ''}<br>เครื่องอื่นเปิดแอป ☰ → นำเข้าโน้ต แล้วเลือกไฟล์นี้เพื่อนำเพลงกลับมา</p>`);
+/* the files are ready: the person taps a button (a fresh tap is needed for the iOS share sheet) */
+function offerBackupFiles(files) {
+  const total = files.reduce((a, f) => a + f.size, 0), hasShare = typeof navigator.share === 'function', canPick = typeof window.showDirectoryPicker === 'function';
+  const asType = (fs, t) => fs.map(f => new File([f], f.name, t ? { type: t } : {}));
+  const s = sheet(`<h3>ไฟล์สำรองพร้อมแล้ว</h3><p class="sub"><b>${files.length} ไฟล์</b> · รวม ${(total / 1048576).toFixed(0)} MB<br>${files.length === 1 ? esc(files[0].name) : esc(files[0].name.replace(/-ส่วน.*$/, '')) + '-ส่วน…'}</p>
+    <div class="imp">${hasShare ? `<button class="btn" id="bkShare">บันทึกทั้งหมดไปที่ไฟล์ (${files.length} ไฟล์)</button>` : ''}${canPick ? '<button class="btn" id="bkDir">เลือกโฟลเดอร์ที่บันทึก…</button>' : ''}<button class="btn o" id="bkMore">บันทึกทีละกลุ่ม / ทีละไฟล์</button><button class="btn o" id="bkClose">ปิด</button></div>
+    <div id="bkList" class="bklist" hidden></div>
+    <p class="sub" style="margin-top:10px">${hasShare ? 'ในหน้าต่างที่ขึ้นมา เลือก <b>“บันทึกไปที่ไฟล์”</b> → เลือก iCloud Drive → แตะ <b>ไอคอนโฟลเดอร์ใหม่</b> มุมบนขวา ตั้งชื่อโฟลเดอร์ → กดบันทึก ไฟล์ทุกส่วนจะลงในโฟลเดอร์นั้นพร้อมกัน' : 'เครื่องนี้ไม่มีหน้าต่างแชร์ ใช้ “บันทึกทีละกลุ่ม / ทีละไฟล์” แทน'}<br>เครื่องอื่น: ☰ → นำเข้าโน้ต → เข้าโฟลเดอร์นั้น กด <b>เลือกทั้งหมด</b> (Select All) แล้วนำเข้าครั้งเดียว</p>`);
   const done = msg => { s.close(); toast(msg); };
-  $('#bkClose', s.el).onclick = () => s.close();
-  if (hasShare) $('#bkShare', s.el).onclick = async () => {
-    const order = okIdx >= 0 ? [okIdx, ...files.keys()].filter((v, i, a) => a.indexOf(v) === i) : [...files.keys()];
-    for (const i of order) {
-      try { await navigator.share({ files: [files[i]], title: fileName }); return done('ส่งไฟล์สำรองแล้ว'); }
-      catch (err) { if (err && err.name === 'AbortError') return; /* try the next file type */ }
+  const shareFiles = async fs => {
+    for (const t of ['application/zip', 'application/octet-stream', '']) {
+      try { await navigator.share({ files: asType(fs, t), title: fs[0].name }); return true; }
+      catch (err) { if (err && err.name === 'AbortError') return null; /* next file type */ }
     }
-    toast('เปิดหน้าต่างแชร์ไม่ได้ในเครื่องนี้ ลองกด “ดาวน์โหลด” แทน');
+    return false;
   };
-  if (canPick) $('#bkPick', s.el).onclick = async () => {
-    try { const h = await window.showSaveFilePicker({ suggestedName: fileName, types: [{ description: 'ZIP', accept: { 'application/zip': ['.zip'] } }] }); const w = await h.createWritable(); await w.write(blob); await w.close(); done('บันทึกไฟล์สำรองแล้ว'); }
-    catch (err) { if (err && err.name === 'AbortError') return; toast('บันทึกไม่สำเร็จ ลองกด “ดาวน์โหลด” แทน'); }
+  $('#bkClose', s.el).onclick = () => s.close();
+  const dl = f => { const a = document.createElement('a'); a.href = URL.createObjectURL(f); a.download = f.name; document.body.append(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 8000); };
+  if (hasShare) $('#bkShare', s.el).onclick = async () => {
+    const r = await shareFiles(files); if (r) return done('ส่งไฟล์สำรองแล้ว'); if (r === false) { toast('ส่งทั้งหมดพร้อมกันไม่ได้ ลอง “บันทึกทีละกลุ่ม” แทน'); $('#bkMore', s.el).click(); }
   };
-  $('#bkDl', s.el).onclick = () => {
-    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fileName; document.body.append(a); a.click(); setTimeout(() => { a.remove(); URL.revokeObjectURL(a.href); }, 8000);
-    done('สั่งดาวน์โหลดแล้ว ดูในแอปไฟล์ → ดาวน์โหลด');
+  if (canPick) $('#bkDir', s.el).onclick = async () => {
+    try { const dir = await window.showDirectoryPicker({ mode: 'readwrite' }); for (const f of files) { const h = await dir.getFileHandle(f.name, { create: true }), w = await h.createWritable(); await w.write(f); await w.close(); } done('บันทึกไฟล์สำรองลงโฟลเดอร์แล้ว'); }
+    catch (err) { if (err && err.name === 'AbortError') return; toast('บันทึกไม่สำเร็จ ลอง “บันทึกทีละกลุ่ม” แทน'); }
   };
+  $('#bkMore', s.el).onclick = () => {
+    const L = $('#bkList', s.el); if (!L.hidden) { L.hidden = true; return; } L.hidden = false;
+    const groups = []; for (let i = 0; i < files.length; i += 3) groups.push(files.slice(i, i + 3));
+    L.innerHTML = (hasShare && files.length > 3 ? groups.map((g, k) => `<button class="btn o sm" data-g="${k}">กลุ่ม ${k + 1}: ไฟล์ ${files.indexOf(g[0]) + 1}–${files.indexOf(g[g.length - 1]) + 1}</button>`).join('') : '') +
+      files.map((f, k) => `<div class="bkrow"><span>${esc(f.name)} · ${(f.size / 1048576).toFixed(0)} MB</span>${hasShare ? `<button class="btn o sm" data-s="${k}">แชร์</button>` : ''}<button class="btn o sm" data-d="${k}">ดาวน์โหลด</button></div>`).join('');
+  };
+  $('#bkList', s.el).addEventListener('click', async e => {
+    const g = e.target.closest('[data-g]'), one = e.target.closest('[data-s]'), d = e.target.closest('[data-d]');
+    if (g) { const fs = files.slice(+g.dataset.g * 3, +g.dataset.g * 3 + 3); if (await shareFiles(fs)) toast(`ส่งกลุ่ม ${+g.dataset.g + 1} แล้ว`); }
+    else if (one) { if (await shareFiles([files[+one.dataset.s]])) toast('ส่งไฟล์แล้ว'); }
+    else if (d) dl(files[+d.dataset.d]);
+  });
 }
 async function openInfo() {
   let est = ''; try { const e = await navigator.storage.estimate(); est = `ใช้พื้นที่ ${(e.usage / 1048576).toFixed(0)} MB จาก ${(e.quota / 1048576).toFixed(0)} MB`; } catch { est = 'ตรวจพื้นที่ไม่ได้'; }
