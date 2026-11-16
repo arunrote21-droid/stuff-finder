@@ -216,3 +216,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .bklist[hidden]{display:none}
 .bkrow{display:flex;align-items:center;gap:8px;background:var(--s2);border-radius:12px;padding:6px 8px 6px 12px;font-size:.82rem}
 .bkrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.webrow{display:flex;flex-wrap:wrap;align-items:center;gap:5px;padding:2px 2px 0}
+.webrow span{font-size:.72rem;color:var(--mut);width:100%}
+.webrow button{flex:1;min-width:0;height:30px;border-radius:15px;background:var(--s2);border:1px solid var(--line);font-size:.74rem;font-weight:600;padding:0 6px}
