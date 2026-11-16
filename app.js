@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-16-e';
+const BUILD = 'sheet-2026-11-16-f';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -246,25 +246,15 @@ function renderAll() { renderTop(); renderStrip(); showPage(); if (S.searching) 
 
 /* ───────────── search panel ───────────── */
 function openSearch() {
-  S.searching = true; S.q = ''; S.letter = ''; S.shown = 120; $('#app').classList.remove('reading');
+  S.searching = true; S.q = ''; S.shown = 120; $('#app').classList.remove('reading');
   $('#app').classList.add('searching');
-  $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="websearch">เว็บ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
-  renderResults(); setLetterMode(false); $('#qi').focus();
+  $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="websearch">เว็บ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
+  renderResults(); $('#qi').focus();
 }
 function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); setTimeout(() => { if (!S.searching) $('#panel').innerHTML = ''; }, 420); document.activeElement?.blur?.(); showPage(); chromeArm(); }
-function setLetterMode(on) {
-  S.letterMode = on; $('#letters').classList.toggle('hidden', !on); $('#lm').textContent = on ? '⌨' : 'ก–ฮ';
-  if (on) { S.q = ''; $('#qi').value = ''; S.letter = ''; document.activeElement?.blur?.(); renderLetters(); renderResults(); } else { S.letter = ''; renderResults(); $('#qi').focus(); }
-}
-function renderLetters() {
-  const set = new Map(); for (const s of S.songs.values()) { const l = firstLetter(s.name); set.set(l, (set.get(l) || 0) + 1); }
-  const ls = [...set.keys()].sort((a, b) => collator.compare(a, b));
-  $('#letters').innerHTML = ls.map(l => `<button class="${S.letter === l ? 'on' : ''}" data-act="letter" data-l="${esc(l)}">${esc(l)}</button>`).join('');
-}
 function results() {
   const terms = nfc(S.q).toLowerCase().split(/\s+/).filter(Boolean);
   let list = [...S.songs.values()];
-  if (S.letter) list = list.filter(s => firstLetter(s.name) === S.letter);
   if (terms.length) list = list.filter(s => { const n = nfc(s.name).toLowerCase(); return terms.every(t => n.includes(t)); });
   const rank = s => { const n = sortKey(s.name).toLowerCase(); return terms.length && terms.every(t => n.startsWith(t)) ? 0 : 1; };
   list.sort((a, b) => rank(a) - rank(b) || collator.compare(sortKey(a.name), sortKey(b.name)));
@@ -753,9 +743,7 @@ const ACT = {
   menu: openMenu, import: openImport, queue: openQueueSheet,
   add: () => { if (!S.searching) openSearch(); else $('#qi')?.focus(); },
   closesearch: closeSearch,
-  qclear: () => { S.q = ''; S.letter = ''; if ($('#qi')) $('#qi').value = ''; renderResults(); if (!S.letterMode) $('#qi')?.focus(); },
-  lettermode: () => setLetterMode(!S.letterMode),
-  letter: d => { S.letter = S.letter === d.l ? '' : d.l; S.shown = 120; renderLetters(); renderResults(); },
+  qclear: () => { S.q = ''; if ($('#qi')) $('#qi').value = ''; renderResults(); $('#qi')?.focus(); },
   more: () => { S.shown += 150; renderResults(); },
   addnext: (d, el) => addFromRow(el, 'next', false),
   addend: (d, el) => addFromRow(el, 'end', false),
