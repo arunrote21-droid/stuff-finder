@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-16-b';
+const BUILD = 'sheet-2026-11-16-c';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -655,16 +655,22 @@ async function doBackup() {
 }
 /* the file is ready: the person taps a button (a fresh tap is needed for the iOS share sheet) */
 function offerBackupFile(blob, fileName) {
-  const file = new File([blob], fileName, { type: 'application/zip' });
-  const canShare = !!(navigator.canShare && navigator.canShare({ files: [file] })), canPick = typeof window.showSaveFilePicker === 'function';
+  // some iPads say "cannot share a ZIP" for one file type but accept another, so try a few types and still offer the button
+  const types = ['application/zip', 'application/octet-stream', ''], files = types.map(t => new File([blob], fileName, t ? { type: t } : {}));
+  const hasShare = typeof navigator.share === 'function', canPick = typeof window.showSaveFilePicker === 'function';
+  const okIdx = hasShare && navigator.canShare ? files.findIndex(f => { try { return navigator.canShare({ files: [f] }); } catch { return false; } }) : -1;
   const s = sheet(`<h3>ไฟล์สำรองพร้อมแล้ว</h3><p class="sub"><b>${esc(fileName)}</b><br>ขนาด ${(blob.size / 1048576).toFixed(1)} MB</p>
-    <div class="imp">${canShare ? '<button class="btn" id="bkShare">บันทึกไปที่ไฟล์ / แชร์</button>' : ''}${canPick ? '<button class="btn" id="bkPick">เลือกที่บันทึก…</button>' : ''}<button class="btn ${canShare || canPick ? 'o' : ''}" id="bkDl">ดาวน์โหลด</button><button class="btn o" id="bkClose">ปิด</button></div>
-    <p class="sub" style="margin-top:10px">${canShare ? 'ในหน้าต่างที่ขึ้นมา เลือก “บันทึกไปที่ไฟล์” แล้วเลือกโฟลเดอร์ (เช่น iCloud Drive) หรือเลือก AirDrop เพื่อส่งไปอีกเครื่อง' : 'ไฟล์จะอยู่ในโฟลเดอร์ดาวน์โหลดของเครื่อง'}<br>เครื่องอื่นเปิดแอป ☰ → นำเข้าโน้ต แล้วเลือกไฟล์นี้เพื่อนำเพลงกลับมา</p>`);
+    <div class="imp">${hasShare ? '<button class="btn" id="bkShare">บันทึกไปที่ไฟล์ / แชร์</button>' : ''}${canPick ? '<button class="btn" id="bkPick">เลือกที่บันทึก…</button>' : ''}<button class="btn ${hasShare || canPick ? 'o' : ''}" id="bkDl">ดาวน์โหลด</button><button class="btn o" id="bkClose">ปิด</button></div>
+    <p class="sub" style="margin-top:10px">${hasShare ? 'ในหน้าต่างที่ขึ้นมา เลือก “บันทึกไปที่ไฟล์” แล้วเลือกโฟลเดอร์ (เช่น iCloud Drive) หรือเลือก AirDrop เพื่อส่งไปอีกเครื่อง' : 'เครื่องนี้ไม่มีหน้าต่างแชร์ ไฟล์จะอยู่ในโฟลเดอร์ดาวน์โหลดของเครื่อง'}${hasShare && okIdx < 0 ? '<br>(เครื่องไม่แจ้งว่ารองรับไฟล์ ZIP แต่ลองเปิดให้ได้ ถ้าไม่ขึ้นให้กด “ดาวน์โหลด”)' : ''}<br>เครื่องอื่นเปิดแอป ☰ → นำเข้าโน้ต แล้วเลือกไฟล์นี้เพื่อนำเพลงกลับมา</p>`);
   const done = msg => { s.close(); toast(msg); };
   $('#bkClose', s.el).onclick = () => s.close();
-  if (canShare) $('#bkShare', s.el).onclick = async () => {
-    try { await navigator.share({ files: [file], title: fileName }); done('ส่งไฟล์สำรองแล้ว'); }
-    catch (err) { if (err && err.name === 'AbortError') return; toast('แชร์ไม่สำเร็จ ลองกด “ดาวน์โหลด” แทน'); }
+  if (hasShare) $('#bkShare', s.el).onclick = async () => {
+    const order = okIdx >= 0 ? [okIdx, ...files.keys()].filter((v, i, a) => a.indexOf(v) === i) : [...files.keys()];
+    for (const i of order) {
+      try { await navigator.share({ files: [files[i]], title: fileName }); return done('ส่งไฟล์สำรองแล้ว'); }
+      catch (err) { if (err && err.name === 'AbortError') return; /* try the next file type */ }
+    }
+    toast('เปิดหน้าต่างแชร์ไม่ได้ในเครื่องนี้ ลองกด “ดาวน์โหลด” แทน');
   };
   if (canPick) $('#bkPick', s.el).onclick = async () => {
     try { const h = await window.showSaveFilePicker({ suggestedName: fileName, types: [{ description: 'ZIP', accept: { 'application/zip': ['.zip'] } }] }); const w = await h.createWritable(); await w.write(blob); await w.close(); done('บันทึกไฟล์สำรองแล้ว'); }
