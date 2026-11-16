@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-16-d';
+const BUILD = 'sheet-2026-11-16-e';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -248,7 +248,7 @@ function renderAll() { renderTop(); renderStrip(); showPage(); if (S.searching) 
 function openSearch() {
   S.searching = true; S.q = ''; S.letter = ''; S.shown = 120; $('#app').classList.remove('reading');
   $('#app').classList.add('searching');
-  $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
+  $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="lettermode" id="lm">ก–ฮ</button><button class="ib" data-act="websearch">เว็บ</button><button class="ib" data-act="closesearch">ปิด</button></div><div class="letters hidden" id="letters"></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="res" id="res"></div>`;
   renderResults(); setLetterMode(false); $('#qi').focus();
 }
 function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); setTimeout(() => { if (!S.searching) $('#panel').innerHTML = ''; }, 420); document.activeElement?.blur?.(); showPage(); chromeArm(); }
@@ -575,6 +575,21 @@ function openRemoteTest() {
   addEventListener('keydown', onKey, true); addEventListener('wheel', onWheel, { capture: true, passive: true }); addEventListener('pointerdown', onDown, true); addEventListener('pointerup', onUp, true);
   s.el.addEventListener('click', e => { if (e.target.closest('[data-close]')) s.close(); });
 }
+/* search the web for a song that is not in the library; the browser page opens on top of the app so the score underneath stays */
+function openWebSearch() {
+  const start = ($('#qi')?.value || '').trim() || curSong()?.name || '';
+  const s = sheet(`<h3>ค้นหาเพลงในเว็บ</h3><input class="field" id="wq" value="${esc(start)}" placeholder="พิมพ์ชื่อเพลง" maxlength="120">
+    <div class="imp"><button class="btn" data-w="g">ค้นใน Google</button><button class="btn" data-w="y">ค้นใน YouTube</button><button class="btn o" data-w="x">ปิด</button></div>
+    <p class="sub" style="margin-top:10px">หน้าเว็บจะเปิดซ้อนบนแอป โน้ตที่เล่นอยู่ยังอยู่ข้างล่าง กด “เสร็จ” ที่มุมหน้าเว็บเพื่อกลับมา (ถ้าเครื่องเปิดเป็นแอป Safari ให้สลับกลับมาที่โน้ตเนตร โน้ตยังอยู่เหมือนเดิม)</p>`);
+  const inp = $('#wq', s.el); setTimeout(() => { inp.focus(); inp.select(); }, 50);
+  const go = k => {
+    const q = inp.value.trim(); if (!q) return inp.focus();
+    const url = k === 'y' ? 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q + ' sheet music') : 'https://www.google.com/search?q=' + encodeURIComponent(q + ' โน้ต');
+    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener'; document.body.append(a); a.click(); a.remove(); s.close();
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') go('g'); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-w]'); if (!b) return; if (b.dataset.w === 'x') s.close(); else go(b.dataset.w); });
+}
 function openQueueSheet() {
   const s = sheet(`<h3>คิวเล่น <small style="color:var(--mut);font-weight:400">${S.queue.length} เพลง</small></h3><p class="sub">แตะเพลงเพื่อเล่น · จับ ⠿ แล้วลากเพื่อสลับลำดับ · ✕ เอาออก</p><div id="qlist"></div><div class="row2"><button class="btn o" data-q="save">บันทึกเป็นชุดเล่น</button><button class="btn bad" data-q="clear">ล้างคิว</button></div>`);
   const list = $('#qlist', s.el);
@@ -746,6 +761,7 @@ const ACT = {
   addend: (d, el) => addFromRow(el, 'end', false),
   nextsong: () => play(S.cur + 1),
   edit: () => enterEdit(),
+  websearch: () => openWebSearch(),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
 document.addEventListener('click', e => {
