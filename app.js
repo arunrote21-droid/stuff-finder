@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-a';
+const BUILD = 'sheet-2026-11-17-b';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -252,8 +252,11 @@ function openSearch() {
   renderResults(); $('#qi').focus();
 }
 function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); setTimeout(() => { if (!S.searching) $('#panel').innerHTML = ''; }, 420); document.activeElement?.blur?.(); showPage(); chromeArm(); }
+/* words such as "คอด" / "โน้ต" are typed only to steer the web search; they are not part of a song name */
+const HINT_WORDS = /(^|\s)(คอด|คอร์ด|คอร์ท|โน้ต|โน๊ต|โน้ตเพลง|chord|chords|sheet|note|notes)(?=\s|$)/gi;
+const stripHints = t => nfc(t).replace(HINT_WORDS, ' ').replace(/\s+/g, ' ').trim();
 function results() {
-  const terms = nfc(S.q).toLowerCase().split(/\s+/).filter(Boolean);
+  const terms = stripHints(S.q).toLowerCase().split(/\s+/).filter(Boolean);
   let list = [...S.songs.values()];
   if (terms.length) list = list.filter(s => { const n = nfc(s.name).toLowerCase(); return terms.every(t => n.includes(t)); });
   const rank = s => { const n = sortKey(s.name).toLowerCase(); return terms.length && terms.every(t => n.startsWith(t)) ? 0 : 1; };
@@ -569,12 +572,12 @@ function openRemoteTest() {
 /* search the web for a song that is not in the library, using the text in the search box; results open outside the score area */
 /* songs searched on the web because the library does not have them yet, kept so the notes can be added after the gig */
 const WISH = { list: [] };
-const wishNorm = t => nfc(t).toLowerCase().replace(/\s+/g, ' ').trim();
+const wishNorm = t => stripHints(t).toLowerCase();
 async function wishLoad() { try { const v = await TH.get('wish:list'); if (Array.isArray(v)) WISH.list = v; } catch { /* none yet */ } }
 function wishSave() { TH.put('wish:list', WISH.list).catch(() => {}); }
 function wishAdd(q) {
-  const k = wishNorm(q), now = Date.now(), old = WISH.list.find(x => wishNorm(x.q) === k);
-  if (old) { old.t = now; old.n = (old.n || 1) + 1; } else WISH.list.unshift({ q: q.trim(), t: now, n: 1 });
+  const clean = stripHints(q) || q.trim(), k = wishNorm(clean), now = Date.now(), old = WISH.list.find(x => wishNorm(x.q) === k);
+  if (old) { old.t = now; old.n = (old.n || 1) + 1; } else WISH.list.unshift({ q: clean, t: now, n: 1 });
   wishSave(); toast('จดไว้ในรายการ “เพลงที่ยังไม่มีโน้ต” แล้ว');
 }
 const wishInLibrary = q => { const k = wishNorm(q); return k && [...S.songs.values()].some(s => { const n = wishNorm(s.name); return n.includes(k) || k.includes(n); }); };
@@ -589,13 +592,13 @@ function openWish() {
   s.el.addEventListener('click', async e => {
     if (e.target.closest('[data-w=x]')) return s.close();
     const g = e.target.closest('[data-g]'), r = e.target.closest('[data-r]');
-    if (g) { const x = WISH.list[+g.dataset.g]; const a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent(x.q + ' โน้ต'); a.target = '_blank'; a.rel = 'noopener'; document.body.append(a); a.click(); a.remove(); }
+    if (g) { const x = WISH.list[+g.dataset.g]; const a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent('คอด ' + x.q); a.target = '_blank'; a.rel = 'noopener'; document.body.append(a); a.click(); a.remove(); }
     else if (r) { const x = WISH.list[+r.dataset.r]; if (await confirmDel(`ลบ “${x.q}” ออกจากรายการ?`, 'ลบแค่ชื่อที่จดไว้ ไม่กระทบโน้ตในแอป', 'ลบ')) { WISH.list = WISH.list.filter(z => z !== x); wishSave(); paint(); } }
   });
 }
 function openWeb(k) {
   const q = ($('#qi')?.value || '').trim(); if (!q) { toast('พิมพ์ชื่อเพลงในช่องค้นหาก่อน'); return $('#qi')?.focus(); }
-  const g = 'https://www.google.com/search?q=' + encodeURIComponent(q + ' โน้ต'), y = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q + ' sheet music');
+  const hinted = stripHints(q) !== nfc(q).trim(), g = 'https://www.google.com/search?q=' + encodeURIComponent(hinted ? q : q + ' โน้ต'), y = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q + ' sheet music');
   const nav = (url, same) => { const a = document.createElement('a'); a.href = url; if (!same) { a.target = '_blank'; a.rel = 'noopener'; } document.body.append(a); a.click(); a.remove(); };
   wishAdd(q);
   if (k === 'y') return nav(y);
