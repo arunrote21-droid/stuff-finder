@@ -300,6 +300,6 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbl button.sn.o{border:1px solid var(--line);color:var(--ink)}
 
 /* tempo dot: the soft glowing style, just bigger */
-#bpmdot{top:12px;right:16px;gap:9px;font-size:1.05rem;font-weight:700;color:rgba(30,40,34,.7)}
-#bpmdot i{width:32px;height:32px;opacity:.3;background:#4cd987}
+#bpmdot{top:12px;right:16px;gap:11px;font-size:1.35rem;font-weight:700;color:rgba(30,40,34,.7)}
+#bpmdot i{width:48px;height:48px;opacity:.3;background:#4cd987}
 @keyframes bpmflash{0%{opacity:1;box-shadow:0 0 14px 4px rgba(76,217,135,.9)}18%{opacity:.3;box-shadow:none}100%{opacity:.3}}
