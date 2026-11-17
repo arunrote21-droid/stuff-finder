@@ -317,3 +317,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 /* song name as a small green pill with white text: readable on any page */
 #songtag{top:8px;left:10px;padding:3px 12px;border-radius:999px;background:rgba(27,122,82,.82);color:#fff;text-shadow:none;font-size:.85rem;font-weight:700}
+
+/* tags flush with the edges so they cover as little of the score as possible */
+#songtag{top:0;left:0;border-radius:0 0 12px 0;padding:2px 12px 3px 10px}
+.nextsong{bottom:0;border-radius:12px 12px 0 0;padding:3px 14px 4px}
+.dots{bottom:2px;justify-content:flex-start;padding-left:8px}
