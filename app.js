@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-e';
+const BUILD = 'sheet-2026-11-17-f';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -899,6 +899,12 @@ function buildEtb() {
     <div class="eg ec">${ANN_COLORS.map(([c, n]) => `<button data-e="color" data-v="${c}" aria-label="${n}" style="--c:${c}"></button>`).join('')}</div>
     <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
   $('#app').append(t);
+  const nb = document.createElement('div'); nb.id = 'enm'; nb.hidden = true;
+  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button>';
+  $('#app').append(nb);
+  $('#enmx').addEventListener('click', () => { const i = $('#enmi'); i.value = ''; i.focus(); });
+  $('#enmi').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
+  $('#enmi').addEventListener('blur', () => saveEditName());
   const z = document.createElement('div'); z.id = 'esz'; z.hidden = true;
   z.innerHTML = `<div class="ezp"><i id="ezd"></i></div><input id="ezr" type="range" min="0" max="100" step="1" aria-label="ขนาดเส้น"><div class="ezq"><button data-q="20">บาง</button><button data-q="50">กลาง</button><button data-q="85">หนา</button></div>`;
   $('#app').append(z);
@@ -962,7 +968,7 @@ function startCrop() {
   ['pointerup', 'pointercancel'].forEach(t => ov.addEventListener(t, e => { if (CR.drag && e.pointerId === CR.drag.id) CR.drag = null; e.stopPropagation(); }));
   const bar = document.createElement('div'); bar.id = 'ctb';
   bar.innerHTML = '<span>ลากขอบหรือมุมเพื่อเลือกส่วนที่จะเก็บ</span><button data-c="reset">คืนค่า</button><button data-c="cancel">ยกเลิก</button><button data-c="done" class="done">เสร็จ</button>';
-  $('#app').append(bar); $('#etb').hidden = true;
+  $('#app').append(bar); $('#etb').hidden = true; $('#enm').hidden = true;
   bar.addEventListener('click', async e => {
     const b = e.target.closest('[data-c]'); if (!b) return; const a = b.dataset.c;
     if (a === 'reset') { await cropSet(song.id, S.page, null); CROP.manual = false; endCrop(true); toast('คืนค่าการครอปหน้านี้แล้ว'); }
@@ -973,14 +979,24 @@ function startCrop() {
   crPaint(); window.addEventListener('resize', crPaint);
 }
 function endCrop(reload) {
-  CROP.editing = false; CR.drag = null; window.removeEventListener('resize', crPaint); $('#cropov')?.remove(); $('#ctb')?.remove(); $('#etb').hidden = false;
+  CROP.editing = false; CR.drag = null; window.removeEventListener('resize', crPaint); $('#cropov')?.remove(); $('#ctb')?.remove(); $('#etb').hidden = false; $('#enm').hidden = false;
   if (reload) showPage(); else { applyZoom(); annRender(); } etbPaint();
+}
+async function saveEditName() {
+  const song = curSong(), i = $('#enmi'); if (!song || !i) return;
+  let n = nfc(i.value).replace(/\s+/g, ' ').trim();
+  if (!n || n === song.name) { i.value = song.name; return; }
+  const have = new Set([...S.songs.values()].filter(x => x.id !== song.id).map(x => nfc(x.name).toLowerCase()));
+  if (have.has(n.toLowerCase())) { let k = 2; while (have.has((n + ' (' + k + ')').toLowerCase())) k++; n += ' (' + k + ')'; }
+  song.name = n; i.value = n;
+  try { await DB.putSongMeta(song); } catch { toast('บันทึกชื่อไม่สำเร็จ'); return; }
+  renderAll(); toast('เปลี่ยนชื่อเป็น “' + n + '” แล้ว');
 }
 function enterEdit() {
   if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
-  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
+  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
 }
-function exitEdit() { if (CROP.editing) endCrop(false); $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
+async function exitEdit() { if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
 function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); toast(ANN.show ? 'แสดงรอยที่วาด: เปิด' : 'แสดงรอยที่วาด: ปิด (ยังบันทึกไว้)'); }
 
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
