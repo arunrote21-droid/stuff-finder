@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-i';
+const BUILD = 'sheet-2026-11-17-j';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -189,7 +189,7 @@ function applyZoom() {
   const img = $('#pg'); img.style.transformOrigin = '0 0';
   const base = cropBase(), z = (Z.s === 1 && !Z.tx && !Z.ty) ? '' : `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`;
   img.style.transform = (z + ' ' + base).trim();
-  const sv = $('#annsvg'); if (sv) { sv.style.transformOrigin = '0 0'; sv.style.transform = img.style.transform; }
+  for (const sv of [$('#annsvg'), $('#annsvgn')]) if (sv) { sv.style.transformOrigin = '0 0'; sv.style.transform = img.style.transform; }
   $('#zoomBtn').textContent = Z.s > 1 ? '⤢' : '🔍';
 }
 function clampZ() {
@@ -866,13 +866,22 @@ function strokeDark(k) {
   let sum = 0, n = 0; for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) { sum += G.a[y * G.W + x]; n++; } return n > 0 && sum / n < 110;
 }
 function annRender() {
-  const sv = $('#annsvg'); if (!sv) return; const g = pageGeom(), list = ANN.cur && ANN.cur.t !== 'e' ? [...ANN.strokes, ANN.cur] : ANN.strokes;
-  sv.style.display = (ANN.show || S.edit) && g && list.length ? '' : 'none'; if (!g || !list.length) { sv.innerHTML = ''; return; }
-  sv.setAttribute('width', g.W); sv.setAttribute('height', g.H);
+  const sv = $('#annsvg'), sn = $('#annsvgn'); if (!sv || !sn) return; const g = pageGeom(), list = ANN.cur && ANN.cur.t !== 'e' ? [...ANN.strokes, ANN.cur] : ANN.strokes;
+  const on = (ANN.show || S.edit) && g && list.length; sv.style.display = sn.style.display = on ? '' : 'none'; if (!on) { sv.innerHTML = sn.innerHTML = ''; return; }
+  for (const x of [sv, sn]) { x.setAttribute('width', g.W); x.setAttribute('height', g.H); }
   const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
-  sv.innerHTML = list.map(k => { const dk = strokeDark(k), d = annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g), w = k.w * g.dw, c = dk ? (LIGHT[k.c] || k.c) : k.c, o = k.o != null ? k.o : (k.t === 'h' ? (dk ? 0.8 : 0.45) : 1);
-    const halo = dk && k.t !== 'h' && o > 0.5 ? `<path d="${d}" fill="none" stroke="#fff" stroke-opacity="${(0.85 * o).toFixed(2)}" stroke-width="${(w + 3).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` : '';
-    return halo + `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${o}"/>`; }).join('');
+  let multiply = '', normal = '';
+  for (const k of list) {
+    const dk = strokeDark(k), d = annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g), w = k.w * g.dw, c = dk ? (LIGHT[k.c] || k.c) : k.c;
+    if (k.t === 'h') { // highlighter: tints the page like a marker (multiply) on light pages, plain translucent colour on dark ones
+      const o = k.o != null ? k.o : (dk ? 0.8 : 0.45), p = `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${o}"/>`;
+      if (dk) normal += p; else multiply += p;
+    } else { // pen: solid ink, never blended; on dark pages a thin light edge keeps it readable
+      const o = k.o != null ? k.o : 1, halo = dk && o > 0.5 ? `<path d="${d}" fill="none" stroke="#fff" stroke-opacity="${(0.85 * o).toFixed(2)}" stroke-width="${(w + 3).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` : '';
+      normal += halo + `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${o}"/>`;
+    }
+  }
+  sv.innerHTML = multiply; sn.innerHTML = normal;
 }
 function annStart(e) {
   const zz = $('#esz'); if (zz) zz.hidden = true;
@@ -1148,7 +1157,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
-  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad();
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});

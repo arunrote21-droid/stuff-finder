@@ -186,7 +186,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .nextsong{right:auto;left:50%;transform:translateX(-50%);bottom:18px;padding:4px 12px;font-size:.78rem;max-width:56%;opacity:.92}
 
 /* annotations */
-#annsvg{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;mix-blend-mode:multiply;will-change:transform}
+#annsvg,#annsvgn{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;will-change:transform}
+#annsvg{mix-blend-mode:multiply}
 #etb{position:absolute;left:10px;right:10px;bottom:calc(10px + env(safe-area-inset-bottom));z-index:30;display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:22px;background:rgba(16,27,21,.97);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.5)}
 #etb[hidden]{display:none}
 #etb .eg{display:flex;align-items:center;gap:6px}
