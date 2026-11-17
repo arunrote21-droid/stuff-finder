@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-l';
+const BUILD = 'sheet-2026-11-17-m';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -223,7 +223,7 @@ async function showPage() {
     empty.innerHTML = `<h2>ยังไม่มีโน้ต</h2><p>นำเข้าไฟล์โน้ตจากแอปไฟล์ (ZIP หรือรูป) แล้วเพลงจะอยู่ในเครื่องนี้ ใช้ได้โดยไม่ต้องมีอินเทอร์เน็ต</p><button class="btn" data-act="import">นำเข้าโน้ต</button>`; return;
   }
   if (!song) {
-    img.removeAttribute('src'); $('#dots').innerHTML = ''; $('#nextSong').hidden = true;
+    img.removeAttribute('src'); $('#dots').innerHTML = ''; $('#nextSong').hidden = true; dotPaint();
     empty.className = 'empty show';
     empty.innerHTML = `<h2>เลือกเพลงที่จะเล่น</h2><p>กด ＋ ด้านล่างเพื่อค้นหาเพลงแล้วเพิ่มเข้าคิว มีเพลงในเครื่อง ${S.songs.size} เพลง</p><button class="btn" data-act="add">＋ ค้นหาเพลง</button>`; return;
   }
