@@ -301,5 +301,5 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 /* tempo dot: the soft glowing style, just bigger */
 #bpmdot{top:12px;right:16px;gap:9px;font-size:1.05rem;font-weight:700;color:rgba(30,40,34,.7)}
-#bpmdot i{width:32px;height:32px;opacity:.3;background:#08733a}
-@keyframes bpmflash{0%{opacity:1;box-shadow:0 0 14px 4px rgba(8,115,58,.75)}18%{opacity:.3;box-shadow:none}100%{opacity:.3}}
+#bpmdot i{width:32px;height:32px;opacity:.3;background:#4cd987}
+@keyframes bpmflash{0%{opacity:1;box-shadow:0 0 14px 4px rgba(76,217,135,.9)}18%{opacity:.3;box-shadow:none}100%{opacity:.3}}
