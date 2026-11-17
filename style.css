@@ -263,7 +263,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbh{font-size:.78rem;color:var(--mut,#9bb);margin-bottom:8px}
 #setbar .sbl{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
 #setbar .sbl::-webkit-scrollbar{display:none}
-#setbar .sbl button{flex:none;min-width:140px;max-width:220px;padding:10px 14px;border-radius:14px;background:var(--s2);border:1px solid var(--line);color:var(--ink);text-align:left}
+#setbar .sbl button.sc,#setbar .sbl button.sn{flex:none;min-width:140px;max-width:220px;padding:10px 14px;border-radius:14px;background:var(--s2);border:1px solid var(--line);color:var(--ink);text-align:left}
 #setbar .sbl button b{display:block;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #setbar .sbl button small{opacity:.75;font-size:.75rem}
 #setbar .sbl button.on{background:var(--ac);color:var(--acink);border-color:transparent}
@@ -292,3 +292,9 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #bpmdot{top:12px;right:16px;gap:8px;font-size:.95rem;color:rgba(30,40,34,.7)}
 #bpmdot i{width:24px;height:24px;opacity:.3}
 @keyframes bpmflash{0%{opacity:1;box-shadow:0 0 12px 3px #2fbf71}18%{opacity:.3;box-shadow:none}100%{opacity:.3}}
+
+#setbar .sbl button{position:relative}
+#setbar .sbl .sc{padding-right:40px}
+#setbar .sbl .sx{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.28);display:grid;place-items:center;font-size:.75rem}
+#setbar .sbl button.sn{background:transparent;border:2px dashed var(--ac);color:var(--ac)}
+#setbar .sbl button.sn.o{border:1px solid var(--line);color:var(--ink)}
