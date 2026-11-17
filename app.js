@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-16-g';
+const BUILD = 'sheet-2026-11-17-a';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -545,10 +545,11 @@ function openMenu() {
     <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างซ่อนเองเมื่อไม่แตะ แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
     <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
     <button data-m="ann"><span class="ic">✎</span><span>แสดงรอยที่วาดบนโน้ต<small>${ANN.show ? 'เปิดอยู่ (กดปุ่ม ✎ ด้านบนเพื่อวาด)' : 'ปิดอยู่ ยังบันทึกรอยไว้'}</small></span></button>
+    <button data-m="wish"><span class="ic">♫</span><span>เพลงที่ยังไม่มีโน้ต<small>${WISH.list.length ? WISH.list.length + ' เพลงที่ค้นในเว็บแล้วจดไว้' : 'จดให้เองเมื่อค้นเพลงในเว็บ'}</small></span></button>
     <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, wish: openWish, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
 }
 
 function openRemoteTest() {
@@ -566,10 +567,37 @@ function openRemoteTest() {
   s.el.addEventListener('click', e => { if (e.target.closest('[data-close]')) s.close(); });
 }
 /* search the web for a song that is not in the library, using the text in the search box; results open outside the score area */
+/* songs searched on the web because the library does not have them yet, kept so the notes can be added after the gig */
+const WISH = { list: [] };
+const wishNorm = t => nfc(t).toLowerCase().replace(/\s+/g, ' ').trim();
+async function wishLoad() { try { const v = await TH.get('wish:list'); if (Array.isArray(v)) WISH.list = v; } catch { /* none yet */ } }
+function wishSave() { TH.put('wish:list', WISH.list).catch(() => {}); }
+function wishAdd(q) {
+  const k = wishNorm(q), now = Date.now(), old = WISH.list.find(x => wishNorm(x.q) === k);
+  if (old) { old.t = now; old.n = (old.n || 1) + 1; } else WISH.list.unshift({ q: q.trim(), t: now, n: 1 });
+  wishSave(); toast('จดไว้ในรายการ “เพลงที่ยังไม่มีโน้ต” แล้ว');
+}
+const wishInLibrary = q => { const k = wishNorm(q); return k && [...S.songs.values()].some(s => { const n = wishNorm(s.name); return n.includes(k) || k.includes(n); }); };
+function openWish() {
+  const s = sheet(`<h3>เพลงที่ยังไม่มีโน้ต <small id="wc" style="color:var(--mut);font-weight:400"></small></h3><p class="sub">จดให้เองทุกครั้งที่ค้นเพลงในเว็บ เล่นเสร็จแล้วค่อยหาโน้ตมาเพิ่ม</p><div id="wl" class="bklist" style="max-height:52vh"></div><div class="imp"><button class="btn o" data-w="x">ปิด</button></div>`);
+  const paint = () => {
+    const L = $('#wl', s.el); $('#wc', s.el).textContent = `${WISH.list.length} เพลง`;
+    L.innerHTML = WISH.list.length ? WISH.list.map((x, i) => { const have = wishInLibrary(x.q), d = new Date(x.t);
+      return `<div class="bkrow" style="flex-wrap:wrap"><span style="flex:1 1 100%;white-space:normal"><b>${esc(x.q)}</b>${have ? ' <em style="color:var(--ac);font-style:normal">· มีในคลังแล้ว</em>' : ''}<br><small style="color:var(--mut)">ค้นเมื่อ ${d.getDate()}/${d.getMonth() + 1}/${d.getFullYear() + 543} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}${x.n > 1 ? ` · ค้น ${x.n} ครั้ง` : ''}</small></span><button class="btn o sm" data-g="${i}">ค้นอีกครั้ง</button><button class="btn o sm" data-r="${i}">ลบ</button></div>`; }).join('') : '<div class="note">ยังไม่มีเพลงที่จดไว้</div>';
+  };
+  paint();
+  s.el.addEventListener('click', async e => {
+    if (e.target.closest('[data-w=x]')) return s.close();
+    const g = e.target.closest('[data-g]'), r = e.target.closest('[data-r]');
+    if (g) { const x = WISH.list[+g.dataset.g]; const a = document.createElement('a'); a.href = 'https://www.google.com/search?q=' + encodeURIComponent(x.q + ' โน้ต'); a.target = '_blank'; a.rel = 'noopener'; document.body.append(a); a.click(); a.remove(); }
+    else if (r) { const x = WISH.list[+r.dataset.r]; if (await confirmDel(`ลบ “${x.q}” ออกจากรายการ?`, 'ลบแค่ชื่อที่จดไว้ ไม่กระทบโน้ตในแอป', 'ลบ')) { WISH.list = WISH.list.filter(z => z !== x); wishSave(); paint(); } }
+  });
+}
 function openWeb(k) {
   const q = ($('#qi')?.value || '').trim(); if (!q) { toast('พิมพ์ชื่อเพลงในช่องค้นหาก่อน'); return $('#qi')?.focus(); }
   const g = 'https://www.google.com/search?q=' + encodeURIComponent(q + ' โน้ต'), y = 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q + ' sheet music');
   const nav = (url, same) => { const a = document.createElement('a'); a.href = url; if (!same) { a.target = '_blank'; a.rel = 'noopener'; } document.body.append(a); a.click(); a.remove(); };
+  wishAdd(q);
   if (k === 'y') return nav(y);
   if (k === 'g') return nav(g);
   // Opera app: try its URL schemes one after another (nothing happens if the app is not installed)
@@ -1000,6 +1028,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
   { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); $('#pg').addEventListener('load', annRender); buildEtb(); }
+  wishLoad();
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   window.__sheet = { S, DB, CROP, inkBox, ANN };
