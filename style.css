@@ -243,3 +243,10 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #etb{gap:4px;padding:8px 8px}#etb .eg{gap:4px;flex:none}
 #etb button{min-width:40px;padding:0 8px;font-size:.8rem;white-space:nowrap}
 #etb .ec button{width:40px;min-width:40px;height:40px}
+
+#esz{flex-direction:row;align-items:center;width:min(520px,calc(100% - 24px))}
+#esz .ezc{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px}
+#esz .ezrow{display:flex;align-items:center;gap:8px}
+#esz .ezrow>span{flex:none;width:58px;font-size:.78rem;color:var(--mut,#9bb)}
+#esz .ezrow>b{flex:none;width:30px;text-align:right;font-size:.8rem;color:var(--ink)}
+#esz .ezrow input[type=range]{flex:1;min-width:0}

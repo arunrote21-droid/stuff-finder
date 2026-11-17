@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-g';
+const BUILD = 'sheet-2026-11-17-h';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -830,6 +830,8 @@ document.addEventListener('input', e => { if (e.target.id === 'qi') { S.q = e.ta
 const ANN = { cache: new Map(), page: null, strokes: [], undo: [], redo: [], cur: null, tool: 'h', color: '#facc15', show: (() => { try { return localStorage.getItem('sheet:ann') !== '0'; } catch { return true; } })() };
 const ANN_RANGE = { p: [0.002, 0.012], h: [0.015, 0.06] };
 ANN.lvl = (() => { try { return Object.assign({ p: 30, h: 55 }, JSON.parse(localStorage.getItem('sheet:annsize') || '{}')); } catch { return { p: 30, h: 55 }; } })(); // 0..100 per tool
+ANN.op = (() => { try { return Object.assign({ p: 100, h: 60 }, JSON.parse(localStorage.getItem('sheet:annop') || '{}')); } catch { return { p: 100, h: 60 }; } })(); // 0..100 per tool
+const annO = t => Math.max(0.05, ANN.op[t] / 100);
 const annW = t => ANN_RANGE[t][0] + (ANN_RANGE[t][1] - ANN_RANGE[t][0]) * (ANN.lvl[t] / 100);
 const ANN_COLORS = [['#ef4444', 'แดง'], ['#22c55e', 'เขียว'], ['#3b82f6', 'น้ำเงิน'], ['#facc15', 'เหลือง']];
 const annKey = (id, p) => `ann:${id}:${p}`;
@@ -853,23 +855,29 @@ function annToNorm(cx, cy) {
   return [Math.min(1, Math.max(0, (x - g.ox) / g.dw)), Math.min(1, Math.max(0, (y - g.oy) / g.dh))];
 }
 function annPathD(pts, g) { let d = ''; for (let i = 0; i < pts.length; i += 2) d += (i ? 'L' : 'M') + (g.ox + pts[i] * g.dw).toFixed(1) + ' ' + (g.oy + pts[i + 1] * g.dh).toFixed(1); return d; }
-function measureDark() { // dark pages (white notes on black) need brighter ink
-  try { const im = $('#pg'); if (!im.naturalWidth) return; const c = document.createElement('canvas'); c.width = 24; c.height = 32; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, 24, 32);
-    const d = g.getImageData(0, 0, 24, 32).data; let sum = 0; for (let i = 0; i < d.length; i += 4) sum += (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000; ANN.dark = sum / (d.length / 4) < 110; } catch { ANN.dark = false; }
+function measureDark() { // a small brightness grid of the page, so ink can be made brighter where the page is dark
+  ANN.grid = null; try { const im = $('#pg'); if (!im.naturalWidth) return; const W = 48, H = 64, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, W, H);
+    const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) a[i] = (d[i * 4] * 299 + d[i * 4 + 1] * 587 + d[i * 4 + 2] * 114) / 1000; ANN.grid = { W, H, a }; } catch { ANN.grid = null; }
+}
+function strokeDark(k) {
+  const G = ANN.grid; if (!G) return false; let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+  for (let i = 0; i < k.pts.length; i += 2) { x0 = Math.min(x0, k.pts[i]); x1 = Math.max(x1, k.pts[i]); y0 = Math.min(y0, k.pts[i + 1]); y1 = Math.max(y1, k.pts[i + 1]); }
+  const pad = (k.w || 0.01) * 1.5, ax = Math.max(0, Math.floor((x0 - pad) * G.W)), bx = Math.min(G.W - 1, Math.ceil((x1 + pad) * G.W)), ay = Math.max(0, Math.floor((y0 - pad) * G.H)), by = Math.min(G.H - 1, Math.ceil((y1 + pad) * G.H));
+  let sum = 0, n = 0; for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) { sum += G.a[y * G.W + x]; n++; } return n > 0 && sum / n < 110;
 }
 function annRender() {
   const sv = $('#annsvg'); if (!sv) return; const g = pageGeom(), list = ANN.cur && ANN.cur.t !== 'e' ? [...ANN.strokes, ANN.cur] : ANN.strokes;
   sv.style.display = (ANN.show || S.edit) && g && list.length ? '' : 'none'; if (!g || !list.length) { sv.innerHTML = ''; return; }
   sv.setAttribute('width', g.W); sv.setAttribute('height', g.H);
-  const dk = ANN.dark, LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
-  sv.innerHTML = list.map(k => { const d = annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g), w = k.w * g.dw, c = dk ? (LIGHT[k.c] || k.c) : k.c;
-    const halo = dk && k.t !== 'h' ? `<path d="${d}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="${(w + 3).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` : '';
-    return halo + `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${k.t === 'h' ? (dk ? 0.8 : 0.45) : 1}"/>`; }).join('');
+  const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
+  sv.innerHTML = list.map(k => { const dk = strokeDark(k), d = annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g), w = k.w * g.dw, c = dk ? (LIGHT[k.c] || k.c) : k.c, o = k.o != null ? k.o : (k.t === 'h' ? (dk ? 0.8 : 0.45) : 1);
+    const halo = dk && k.t !== 'h' && o > 0.5 ? `<path d="${d}" fill="none" stroke="#fff" stroke-opacity="${(0.85 * o).toFixed(2)}" stroke-width="${(w + 3).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` : '';
+    return halo + `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${o}"/>`; }).join('');
 }
 function annStart(e) {
   const zz = $('#esz'); if (zz) zz.hidden = true;
   const p = annToNorm(e.clientX, e.clientY); if (!p) return false; ANN.before = [...ANN.strokes];
-  if (ANN.tool === 'e') { ANN.cur = { t: 'e' }; annErase(p); } else ANN.cur = { t: ANN.tool, c: ANN.color, w: annW(ANN.tool), pts: [p[0], p[1]] };
+  if (ANN.tool === 'e') { ANN.cur = { t: 'e' }; annErase(p); } else ANN.cur = { t: ANN.tool, c: ANN.color, w: annW(ANN.tool), o: +annO(ANN.tool).toFixed(2), pts: [p[0], p[1]] };
   annRender(); return true;
 }
 function annErase(p) {
@@ -913,10 +921,11 @@ function buildEtb() {
   $('#enmi').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
   $('#enmi').addEventListener('blur', () => saveEditName());
   const z = document.createElement('div'); z.id = 'esz'; z.hidden = true;
-  z.innerHTML = `<div class="ezp"><i id="ezd"></i></div><input id="ezr" type="range" min="0" max="100" step="1" aria-label="ขนาดเส้น"><div class="ezq"><button data-q="20">บาง</button><button data-q="50">กลาง</button><button data-q="85">หนา</button></div>`;
+  z.innerHTML = `<div class="ezp"><i id="ezd"></i></div><div class="ezc"><div class="ezrow"><span>ขนาด</span><input id="ezr" type="range" min="0" max="100" step="1" aria-label="ขนาดเส้น"><div class="ezq"><button data-q="20">บาง</button><button data-q="50">กลาง</button><button data-q="85">หนา</button></div></div><div class="ezrow"><span>ความทึบ</span><input id="ezo" type="range" min="0" max="100" step="1" aria-label="ความทึบ"><b id="ezov">100</b></div></div>`;
   $('#app').append(z);
   const setLvl = v => { ANN.lvl[ANN.tool] = Math.min(100, Math.max(0, +v)); try { localStorage.setItem('sheet:annsize', JSON.stringify(ANN.lvl)); } catch { /* private mode */ } etbPaint(); };
   $('#ezr', z).addEventListener('input', e => setLvl(e.target.value));
+  $('#ezo', z).addEventListener('input', e => { ANN.op[ANN.tool] = Math.min(100, Math.max(0, +e.target.value)); try { localStorage.setItem('sheet:annop', JSON.stringify(ANN.op)); } catch { /* private mode */ } etbPaint(); });
   z.addEventListener('click', e => { const q = e.target.closest('[data-q]'); if (q) setLvl(q.dataset.q); });
   t.addEventListener('click', async e => {
     const b = e.target.closest('[data-e]'); if (!b) return; const a = b.dataset.e;
@@ -938,8 +947,8 @@ function etbPaint() {
   const z = $('#esz'); if (z) {
     if (ANN.tool === 'e') z.hidden = true;
     t.querySelector('[data-e=size]').disabled = ANN.tool === 'e'; t.querySelector('[data-e=size]').classList.toggle('on', !z.hidden);
-    if (ANN.tool !== 'e') { $('#ezr', z).value = ANN.lvl[ANN.tool]; const d = $('#ezd', z), px = Math.max(3, annW(ANN.tool) * 560);
-    d.style.width = d.style.height = px + 'px'; d.style.background = ANN.color; d.style.opacity = ANN.tool === 'h' ? 0.55 : 1; d.style.borderRadius = ANN.tool === 'h' ? '999px' : '50%'; }
+    if (ANN.tool !== 'e') { $('#ezr', z).value = ANN.lvl[ANN.tool]; $('#ezo', z).value = ANN.op[ANN.tool]; $('#ezov', z).textContent = ANN.op[ANN.tool]; const d = $('#ezd', z), px = Math.max(3, annW(ANN.tool) * 560);
+    d.style.width = d.style.height = px + 'px'; d.style.background = ANN.color; d.style.opacity = annO(ANN.tool); d.style.borderRadius = ANN.tool === 'h' ? '999px' : '50%'; }
   }
   t.querySelector('[data-e=undo]').disabled = !ANN.undo.length; t.querySelector('[data-e=redo]').disabled = !ANN.redo.length;
 }
