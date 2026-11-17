@@ -299,7 +299,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbl button.sn{background:transparent;border:2px dashed var(--ac);color:var(--ac)}
 #setbar .sbl button.sn.o{border:1px solid var(--line);color:var(--ink)}
 
-/* tempo dot: bigger, solid and high-contrast */
-#bpmdot{top:12px;right:14px;gap:10px;font-size:1.15rem;font-weight:800;color:rgba(15,25,20,.9);text-shadow:0 0 3px rgba(255,255,255,.8)}
-#bpmdot i{width:34px;height:34px;opacity:1;background:#0f7a43;border:3px solid #052e1a;box-sizing:border-box}
-@keyframes bpmflash{0%{background:#39ff88;box-shadow:0 0 16px 5px #39ff88}18%{background:#0f7a43;box-shadow:none}100%{background:#0f7a43;box-shadow:none}}
+/* tempo dot: the soft glowing style, just bigger */
+#bpmdot{top:12px;right:16px;gap:9px;font-size:1.05rem;font-weight:700;color:rgba(30,40,34,.7)}
+#bpmdot i{width:32px;height:32px;opacity:.3;background:#08733a}
+@keyframes bpmflash{0%{opacity:1;box-shadow:0 0 14px 4px rgba(8,115,58,.75)}18%{opacity:.3;box-shadow:none}100%{opacity:.3}}
