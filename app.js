@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-c';
+const BUILD = 'sheet-2026-11-17-d';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -449,6 +449,31 @@ function openImport() {
   S.importSheet = s;
   $('#pick', s.el).onclick = () => { const f = $('#fileIn'); f.value = ''; f.onchange = () => f.files.length && scanFiles([...f.files], s); f.click(); };
 }
+/* top-bar shortcuts: one tap opens the picker, then the import runs without questions */
+function quickPick(photos) {
+  const f = $(photos ? '#fileImg' : '#fileAny'); f.value = '';
+  f.onchange = () => { const files = [...f.files]; if (files.length) quickImport(files); };
+  f.click();
+}
+const natCmp = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+async function quickImport(files) {
+  const isZip = f => /\.zip$/i.test(f.name) || f.type.includes('zip');
+  if (files.some(isZip) || !files.every(f => IMG_EXT.test(f.name) || f.type.startsWith('image/'))) { // zip (or mixed): same engine as the menu import, started for you
+    openImport(); const s = S.importSheet; await scanFiles(files, s);
+    const go = $('#goImp', s.el); if (go && !go.disabled) go.click(); return;
+  }
+  const list = [...files].sort(natCmp), q = QUALITY.normal; let n = 0;
+  toast(`กำลังนำเข้า ${list.length} หน้า…`);
+  try {
+    const blobs = []; for (const f of list) { blobs.push(await shrink(new Uint8Array(await f.arrayBuffer()), f.name, q)); n++; if (list.length > 1) toast(`กำลังนำเข้า ${n}/${list.length} หน้า…`); }
+    let name = nfc(noExt(list[0].name)) || 'ไม่มีชื่อ'; const have = new Set([...S.songs.values()].map(x => nfc(x.name).toLowerCase()));
+    if (have.has(name.toLowerCase())) { let k = 2; while (have.has((name + ' (' + k + ')').toLowerCase())) k++; name += ' (' + k + ')'; }
+    const song = { id: uid(), name, n: blobs.length, created: Date.now(), bytes: blobs.reduce((a, b) => a + b.size, 0) };
+    await DB.putSong(song, blobs); S.songs.set(song.id, song);
+    const was = S.queue.length; addToQueue(song.id, 'next'); if (was) play(S.cur + 1);
+    toast(`นำเข้า “${name}” ${blobs.length} หน้า แล้ว`); navigator.storage?.persist?.();
+  } catch (err) { toast('นำเข้าไม่สำเร็จ: ' + (err.message || err)); }
+}
 async function scanFiles(files, s) {
   const body = $('#impBody', s.el); body.innerHTML = '<p class="sub"><span class="spin"></span> กำลังอ่านรายการ…</p>';
   const entries = [], skipped = [], zips = []; let setsJson = null, annJson = null;
@@ -790,6 +815,8 @@ const ACT = {
   addend: (d, el) => addFromRow(el, 'end', false),
   nextsong: () => play(S.cur + 1),
   edit: () => enterEdit(),
+  qimg: () => quickPick(true),
+  qfile: () => quickPick(false),
   web: (d) => openWeb(d.k),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
