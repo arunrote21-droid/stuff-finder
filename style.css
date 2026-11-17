@@ -303,3 +303,9 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #bpmdot{top:12px;right:16px;gap:11px;font-size:1.35rem;font-weight:700;color:rgba(30,40,34,.7)}
 #bpmdot i{width:48px;height:48px;opacity:.3;background:#4cd987}
 @keyframes bpmflash{0%{opacity:1;box-shadow:0 0 14px 4px rgba(76,217,135,.9)}18%{opacity:.3;box-shadow:none}100%{opacity:.3}}
+
+/* page numbers instead of dots */
+.dots{bottom:8px;gap:6px;align-items:center}
+.dots .pn{min-width:30px;height:30px;padding:0 4px;border-radius:15px;display:grid;place-items:center;font-weight:800;font-size:.9rem;color:rgba(40,40,40,.55);background:rgba(255,255,255,.35)}
+.dots .pn.on{font-size:1.05rem;color:rgba(255,255,255,.95);background:rgba(27,122,82,.78)}
+.dots .pn.wide{padding:0 12px}

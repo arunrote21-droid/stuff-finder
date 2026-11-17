@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-s';
+const BUILD = 'sheet-2026-11-17-t';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -239,7 +239,7 @@ async function showPage() {
   if (url) img.src = url; else img.removeAttribute('src');
   applyZoom(); annRender(); dotPaint(); $('#editBtn').hidden = false;
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
-  $('#dots').innerHTML = song.n > 1 && song.n <= 12 ? Array.from({ length: song.n }, (_, i) => `<i class="${i === S.page ? 'on' : ''}"></i>`).join('') : '';
+  $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
   const next = S.songs.get(S.queue[S.cur + 1]);
   const ns = $('#nextSong'); ns.hidden = !(next && S.page === song.n - 1); if (!ns.hidden) ns.textContent = `เพลงต่อไป: ${next.name} ▶`;
   saveState();
