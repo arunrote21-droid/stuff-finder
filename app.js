@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-x';
+const BUILD = 'sheet-2026-11-17-y';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -241,13 +241,13 @@ async function showPage() {
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
   const next = S.songs.get(S.queue[S.cur + 1]);
-  const ns = $('#nextSong'); ns.hidden = !(next && S.page === song.n - 1); if (!ns.hidden) ns.textContent = `เพลงต่อไป: ${next.name} ▶`;
+  const ns = $('#nextSong'); ns.hidden = !(next && S.page === song.n - 1); if (!ns.hidden) ns.textContent = `เพลงต่อไป: ${withKey(next)} ▶`;
   saveState();
   if (S.page + 1 < song.n) { pageUrl(song, S.page + 1); if (CROP.on) inkBox(song.id, S.page + 1); } else if (next) { pageUrl(next, 0); if (CROP.on) inkBox(next.id, 0); }
 }
 function renderTop() {
   const song = curSong();
-  $('#tSong').textContent = song ? song.name : 'โน้ตเนตร'; { const t = $('#songtag'); if (t) { t.textContent = song ? song.name : ''; t.hidden = !song; } }
+  $('#tSong').textContent = song ? song.name : 'โน้ตเนตร'; tagPaint();
   $('#tSet').textContent = S.setName ? `ชุด: ${S.setName}` : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
   if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; $('#editBtn').hidden = true; }
 }
@@ -1064,7 +1064,10 @@ function endCrop(reload) {
 }
 /* key + tempo per song: chips in the edit bar, a small panel to set them, and a quiet blinking dot on the score */
 const TAPS = [];
+const withKey = x => x.name + (x.key ? ' · ' + x.key : '');
+function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
 function dotPaint() {
+  tagPaint();
   const song = curSong(), d = $('#bpmdot'); if (!d) return;
   const ok = song && song.bpm >= 30; d.hidden = !ok;
   if (ok) { d.querySelector('span').textContent = song.bpm; const i = d.querySelector('i'); i.style.animation = 'none'; void i.offsetWidth; i.style.animation = `bpmflash ${(60 / song.bpm).toFixed(3)}s linear infinite`; }
