@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-f';
+const BUILD = 'sheet-2026-11-17-g';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -853,11 +853,18 @@ function annToNorm(cx, cy) {
   return [Math.min(1, Math.max(0, (x - g.ox) / g.dw)), Math.min(1, Math.max(0, (y - g.oy) / g.dh))];
 }
 function annPathD(pts, g) { let d = ''; for (let i = 0; i < pts.length; i += 2) d += (i ? 'L' : 'M') + (g.ox + pts[i] * g.dw).toFixed(1) + ' ' + (g.oy + pts[i + 1] * g.dh).toFixed(1); return d; }
+function measureDark() { // dark pages (white notes on black) need brighter ink
+  try { const im = $('#pg'); if (!im.naturalWidth) return; const c = document.createElement('canvas'); c.width = 24; c.height = 32; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, 24, 32);
+    const d = g.getImageData(0, 0, 24, 32).data; let sum = 0; for (let i = 0; i < d.length; i += 4) sum += (d[i] * 299 + d[i + 1] * 587 + d[i + 2] * 114) / 1000; ANN.dark = sum / (d.length / 4) < 110; } catch { ANN.dark = false; }
+}
 function annRender() {
   const sv = $('#annsvg'); if (!sv) return; const g = pageGeom(), list = ANN.cur && ANN.cur.t !== 'e' ? [...ANN.strokes, ANN.cur] : ANN.strokes;
   sv.style.display = (ANN.show || S.edit) && g && list.length ? '' : 'none'; if (!g || !list.length) { sv.innerHTML = ''; return; }
   sv.setAttribute('width', g.W); sv.setAttribute('height', g.H);
-  sv.innerHTML = list.map(k => `<path d="${annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g)}" fill="none" stroke="${k.c}" stroke-width="${(k.w * g.dw).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${k.t === 'h' ? 0.45 : 1}"/>`).join('');
+  const dk = ANN.dark, LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
+  sv.innerHTML = list.map(k => { const d = annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g), w = k.w * g.dw, c = dk ? (LIGHT[k.c] || k.c) : k.c;
+    const halo = dk && k.t !== 'h' ? `<path d="${d}" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="${(w + 3).toFixed(2)}" stroke-linecap="round" stroke-linejoin="round"/>` : '';
+    return halo + `<path d="${d}" fill="none" stroke="${c}" stroke-width="${w.toFixed(2)}" stroke-linecap="round" stroke-linejoin="round" stroke-opacity="${k.t === 'h' ? (dk ? 0.8 : 0.45) : 1}"/>`; }).join('');
 }
 function annStart(e) {
   const zz = $('#esz'); if (zz) zz.hidden = true;
@@ -1132,7 +1139,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
-  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); $('#pg').addEventListener('load', annRender); buildEtb(); }
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad();
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
