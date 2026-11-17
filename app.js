@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-j';
+const BUILD = 'sheet-2026-11-17-k';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -665,13 +665,28 @@ async function saveCurrentSet() {
   const old = S.sets.find(x => x.name === name); const rec = { id: old?.id || uid(), name, songs: [...S.queue] };
   await DB.putSet(rec); if (old) Object.assign(old, rec); else S.sets.push(rec); S.setName = name; saveState(); renderTop(); toast(`บันทึกชุด “${name}” แล้ว (${rec.songs.length} เพลง)`);
 }
+function loadSet(x) {
+  const prev = { q: [...S.queue], c: S.cur, p: S.page, n: S.setName }; S.queue = x.songs.filter(i => S.songs.has(i)); S.cur = 0; S.page = 0; S.setName = x.name; resetZoom(); saveState(); renderAll();
+  toast(`เปิดชุด “${x.name}” (${S.queue.length} เพลง)`, { label: 'เลิกทำ', fn: () => { S.queue = prev.q; S.cur = prev.c; S.page = prev.p; S.setName = prev.n; saveState(); renderAll(); } });
+}
+/* quick set picker under the top bar: tap ♪, tap a set, everything closes and that set is loaded */
+function closeSetBar() { $('#setbar')?.remove(); $('#qsetBtn')?.classList.remove('on'); document.removeEventListener('pointerdown', setBarOutside, true); }
+function setBarOutside(e) { if (!e.target.closest('#setbar,#qsetBtn')) closeSetBar(); }
+function toggleSetBar() {
+  if ($('#setbar')) return closeSetBar();
+  const bar = document.createElement('div'); bar.id = 'setbar'; const top = $('.top').getBoundingClientRect().bottom; bar.style.top = top + 'px';
+  bar.innerHTML = S.sets.length ? '<div class="sbh">ชุดเล่น · เลื่อนซ้าย-ขวา แล้วแตะเพื่อเปิดชุด</div><div class="sbl">' + S.sets.map(x => `<button data-sid="${x.id}" class="${x.name === S.setName ? 'on' : ''}"><b>${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small></button>`).join('') + '</div>'
+    : '<div class="sbh">ยังไม่มีชุดเล่น · เพิ่มเพลงเข้าคิว แล้วไป ☰ → ชุดเล่น → บันทึกคิวเป็นชุดใหม่</div>';
+  bar.addEventListener('click', e => { const b = e.target.closest('[data-sid]'); if (!b) return; const x = S.sets.find(z => z.id === b.dataset.sid); closeSetBar(); if (x) loadSet(x); });
+  $('#app').append(bar); $('#qsetBtn')?.classList.add('on'); setTimeout(() => document.addEventListener('pointerdown', setBarOutside, true), 0);
+}
 function openSets() {
   const s = sheet(`<h3>ชุดเล่น</h3><button class="btn" style="width:100%;margin-bottom:10px" data-s="save">บันทึกคิวปัจจุบันเป็นชุดใหม่</button><div id="slist"></div>`);
   const paint = () => { $('#slist', s.el).innerHTML = S.sets.map(x => `<div class="lrow"><div class="nm" data-open="${x.id}">${esc(x.name)}<small>${x.songs.filter(i => S.songs.has(i)).length} เพลง · แตะเพื่อเปิดเป็นคิว</small></div><button class="x" data-del="${x.id}" aria-label="ลบ">🗑</button></div>`).join('') || '<div class="note">ยังไม่มีชุดเล่น</div>'; };
   paint();
   s.el.addEventListener('click', async e => {
     if (e.target.closest('[data-s]')) { s.close(); saveCurrentSet(); return; }
-    const o = e.target.closest('[data-open]'); if (o) { const x = S.sets.find(z => z.id === o.dataset.open); const prev = { q: [...S.queue], c: S.cur, p: S.page, n: S.setName }; S.queue = x.songs.filter(i => S.songs.has(i)); S.cur = 0; S.page = 0; S.setName = x.name; saveState(); renderAll(); s.close(); toast(`เปิดชุด “${x.name}” (${S.queue.length} เพลง)`, { label: 'เลิกทำ', fn: () => { S.queue = prev.q; S.cur = prev.c; S.page = prev.p; S.setName = prev.n; saveState(); renderAll(); } }); return; }
+    const o = e.target.closest('[data-open]'); if (o) { const x = S.sets.find(z => z.id === o.dataset.open); s.close(); loadSet(x); return; }
     const d = e.target.closest('[data-del]'); if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (await confirmDel(`ลบชุด “${x.name}”?`, 'โน้ตในเครื่องไม่ถูกลบ')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); paint(); } }
   });
 }
@@ -816,6 +831,7 @@ const ACT = {
   nextsong: () => play(S.cur + 1),
   edit: () => enterEdit(),
   qimp: () => quickPick(),
+  qset: () => toggleSetBar(),
   web: (d) => openWeb(d.k),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };

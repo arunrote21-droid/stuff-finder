@@ -256,3 +256,14 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #enm{left:auto;right:10px;transform:none;top:calc(6px + env(safe-area-inset-top));width:min(190px,45vw);padding:1px 1px 1px 8px;border-radius:12px;background:rgba(16,27,21,.8)}
 #enm input{height:26px;font-size:.78rem}
 #enm button{width:26px;height:26px;font-size:.7rem}
+
+/* quick set picker */
+#qsetBtn.on{background:var(--ac);color:var(--acink)}
+#setbar{position:absolute;left:0;right:0;z-index:40;padding:10px 12px 12px;background:rgba(16,27,21,.97);border-bottom:1px solid var(--line);box-shadow:0 10px 24px rgba(0,0,0,.5)}
+#setbar .sbh{font-size:.78rem;color:var(--mut,#9bb);margin-bottom:8px}
+#setbar .sbl{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+#setbar .sbl::-webkit-scrollbar{display:none}
+#setbar .sbl button{flex:none;min-width:140px;max-width:220px;padding:10px 14px;border-radius:14px;background:var(--s2);border:1px solid var(--line);color:var(--ink);text-align:left}
+#setbar .sbl button b{display:block;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#setbar .sbl button small{opacity:.75;font-size:.75rem}
+#setbar .sbl button.on{background:var(--ac);color:var(--acink);border-color:transparent}
