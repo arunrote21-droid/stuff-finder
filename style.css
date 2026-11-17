@@ -298,3 +298,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbl .sx{position:absolute;top:6px;right:6px;width:28px;height:28px;border-radius:50%;background:rgba(0,0,0,.28);display:grid;place-items:center;font-size:.75rem}
 #setbar .sbl button.sn{background:transparent;border:2px dashed var(--ac);color:var(--ac)}
 #setbar .sbl button.sn.o{border:1px solid var(--line);color:var(--ink)}
+
+/* tempo dot: bigger, solid and high-contrast */
+#bpmdot{top:12px;right:14px;gap:10px;font-size:1.15rem;font-weight:800;color:rgba(15,25,20,.9);text-shadow:0 0 3px rgba(255,255,255,.8)}
+#bpmdot i{width:34px;height:34px;opacity:1;background:#0f7a43;border:3px solid #052e1a;box-sizing:border-box}
+@keyframes bpmflash{0%{background:#39ff88;box-shadow:0 0 16px 5px #39ff88}18%{background:#0f7a43;box-shadow:none}100%{background:#0f7a43;box-shadow:none}}
