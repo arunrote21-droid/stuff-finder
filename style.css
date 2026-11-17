@@ -309,3 +309,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .dots .pn{min-width:30px;height:30px;padding:0 4px;border-radius:15px;display:grid;place-items:center;font-weight:800;font-size:.9rem;color:rgba(40,40,40,.55);background:rgba(255,255,255,.35)}
 .dots .pn.on{font-size:1.05rem;color:rgba(255,255,255,.95);background:rgba(27,122,82,.78)}
 .dots .pn.wide{padding:0 12px}
+
+/* small translucent song name at the top-left of the score (shown when the top bar is hidden) */
+#songtag{position:absolute;top:8px;left:12px;z-index:20;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;font-size:.82rem;font-weight:700;color:rgba(20,28,24,.6);text-shadow:0 0 3px rgba(255,255,255,.9),0 0 6px rgba(255,255,255,.6)}
+#songtag[hidden]{display:none}
+#app:not(.reading) #songtag{display:none}

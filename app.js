@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-u';
+const BUILD = 'sheet-2026-11-17-v';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -247,7 +247,7 @@ async function showPage() {
 }
 function renderTop() {
   const song = curSong();
-  $('#tSong').textContent = song ? song.name : 'โน้ตเนตร';
+  $('#tSong').textContent = song ? song.name : 'โน้ตเนตร'; { const t = $('#songtag'); if (t) { t.textContent = song ? song.name : ''; t.hidden = !song; } }
   $('#tSet').textContent = S.setName ? `ชุด: ${S.setName}` : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
   if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; $('#editBtn').hidden = true; }
 }
@@ -1253,7 +1253,8 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
-  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const st = document.createElement('div'); st.id = 'songtag'; st.hidden = true; $('#stage').append(st); }
+  { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad();
   loadState(); renderAll(); chromeArm();
