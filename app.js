@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-d';
+const BUILD = 'sheet-2026-11-17-e';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -450,8 +450,8 @@ function openImport() {
   $('#pick', s.el).onclick = () => { const f = $('#fileIn'); f.value = ''; f.onchange = () => f.files.length && scanFiles([...f.files], s); f.click(); };
 }
 /* top-bar shortcuts: one tap opens the picker, then the import runs without questions */
-function quickPick(photos) {
-  const f = $(photos ? '#fileImg' : '#fileAny'); f.value = '';
+function quickPick() {
+  const f = $('#fileAny'); f.value = '';
   f.onchange = () => { const files = [...f.files]; if (files.length) quickImport(files); };
   f.click();
 }
@@ -815,8 +815,7 @@ const ACT = {
   addend: (d, el) => addFromRow(el, 'end', false),
   nextsong: () => play(S.cur + 1),
   edit: () => enterEdit(),
-  qimg: () => quickPick(true),
-  qfile: () => quickPick(false),
+  qimp: () => quickPick(),
   web: (d) => openWeb(d.k),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
