@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-k';
+const BUILD = 'sheet-2026-11-17-l';
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -218,7 +218,7 @@ async function showPage() {
   const song = curSong(), tok = ++pageToken;
   const empty = $('#empty'), img = $('#pg');
   if (!S.songs.size) {
-    img.removeAttribute('src'); $('#dots').innerHTML = ''; $('#nextSong').hidden = true;
+    img.removeAttribute('src'); $('#dots').innerHTML = ''; $('#nextSong').hidden = true; dotPaint();
     empty.className = 'empty show';
     empty.innerHTML = `<h2>ยังไม่มีโน้ต</h2><p>นำเข้าไฟล์โน้ตจากแอปไฟล์ (ZIP หรือรูป) แล้วเพลงจะอยู่ในเครื่องนี้ ใช้ได้โดยไม่ต้องมีอินเทอร์เน็ต</p><button class="btn" data-act="import">นำเข้าโน้ต</button>`; return;
   }
@@ -232,7 +232,7 @@ async function showPage() {
   const [url, box, man] = await Promise.all([pageUrl(song, S.page), CROP.on ? inkBox(song.id, S.page) : null, cropGet(song.id, S.page)]); if (tok !== pageToken) return;
   CROP.manual = !!man; CROP.box = man || box; await annSetPage(song, S.page); if (tok !== pageToken) return;
   if (url) img.src = url; else img.removeAttribute('src');
-  applyZoom(); annRender(); $('#editBtn').hidden = false;
+  applyZoom(); annRender(); dotPaint(); $('#editBtn').hidden = false;
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n > 1 && song.n <= 12 ? Array.from({ length: song.n }, (_, i) => `<i class="${i === S.page ? 'on' : ''}"></i>`).join('') : '';
   const next = S.songs.get(S.queue[S.cur + 1]);
@@ -564,6 +564,7 @@ async function runImport(s, st) {
       for (const it of data) {
         const song = byName.get(nfc(it.song || '').toLowerCase()); if (!song || !(it.page >= 0 && it.page < song.n)) continue;
         if (it.crop && it.crop.x1 > it.crop.x0 && it.crop.y1 > it.crop.y0) { const ck = cropKey(song.id, it.page); if (!(await TH.get(ck))) { await TH.put(ck, it.crop); cropMem.delete(ck); } }
+        if (it.meta && !song.key && !song.bpm) { if (it.meta.key) song.key = String(it.meta.key).slice(0, 8); if (it.meta.bpm >= 30) song.bpm = Math.min(240, Math.round(it.meta.bpm)); await DB.putSongMeta(song); }
         if (!Array.isArray(it.strokes) || !it.strokes.length) continue;
         const k = annKey(song.id, it.page); if (!(ANN.cache.get(k)?.length) && !(await TH.get(k))?.strokes?.length) { await TH.put(k, { v: 1, strokes: it.strokes }); ANN.cache.delete(k); }
       }
@@ -748,6 +749,7 @@ async function doBackup() {
     try { // drawings, matched back to songs by name when restored
       const names = new Map([...S.songs.values()].map(x => [x.id, x.name])), items = [];
       for (const [k, v] of await TH.prefix('ann:')) { const [, id, pg] = k.split(':'); if (names.has(id) && v && v.strokes && v.strokes.length) items.push({ song: names.get(id), page: +pg, strokes: v.strokes }); }
+      for (const x of S.songs.values()) if (x.key || x.bpm) items.push({ song: x.name, page: 0, meta: { key: x.key || '', bpm: x.bpm || 0 } });
       for (const [k, v] of await TH.prefix('crop:')) { const [, id, pg] = k.split(':'); if (names.has(id) && v && v.x1 > v.x0) items.push({ song: names.get(id), page: +pg, crop: v }); }
       if (items.length) addFile('_รอยแก้ไข.json', new TextEncoder().encode(JSON.stringify(items)));
     } catch { /* drawings are optional */ }
@@ -940,7 +942,8 @@ function buildEtb() {
     <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
   $('#app').append(t);
   const nb = document.createElement('div'); nb.id = 'enm'; nb.hidden = true;
-  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button>';
+  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div>';
+  $('#ekey', nb).addEventListener('click', () => openMeta('key')); $('#ebpm', nb).addEventListener('click', () => openMeta('bpm'));
   $('#app').append(nb);
   $('#enmx').addEventListener('click', () => { const i = $('#enmi'); i.value = ''; i.focus(); });
   $('#enmi').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
@@ -1023,6 +1026,47 @@ function endCrop(reload) {
   CROP.editing = false; CR.drag = null; window.removeEventListener('resize', crPaint); $('#cropov')?.remove(); $('#ctb')?.remove(); $('#etb').hidden = false; $('#enm').hidden = false;
   if (reload) showPage(); else { applyZoom(); annRender(); } etbPaint();
 }
+/* key + tempo per song: chips in the edit bar, a small panel to set them, and a quiet blinking dot on the score */
+const TAPS = [];
+function dotPaint() {
+  const song = curSong(), d = $('#bpmdot'); if (!d) return;
+  const ok = song && song.bpm >= 30; d.hidden = !ok;
+  if (ok) { d.querySelector('span').textContent = song.bpm; const i = d.querySelector('i'); i.style.animation = 'none'; void i.offsetWidth; i.style.animation = `bpmflash ${(60 / song.bpm).toFixed(3)}s linear infinite`; }
+  const k = $('#ekey'), b = $('#ebpm'); if (k && song) { k.textContent = 'คีย์ ' + (song.key || '—'); b.textContent = '♩ ' + (song.bpm || '—'); }
+}
+async function metaSave(song) { try { await DB.putSongMeta(song); } catch { toast('บันทึกคีย์/ความเร็วไม่สำเร็จ'); } dotPaint(); }
+function closeMeta() { $('#kbp')?.remove(); document.removeEventListener('pointerdown', metaOutside, true); }
+function metaOutside(e) { if (!e.target.closest('#kbp,#ekey,#ebpm')) closeMeta(); }
+function openMeta(which) {
+  const song = curSong(); if (!song) return; if ($('#kbp')) closeMeta();
+  const p = document.createElement('div'); p.id = 'kbp';
+  const parse = t => { const m = /^([A-Ga-g])([#♯b♭]?)\s*(m|min|minor)?/.exec((t || '').trim()); return m ? { r: m[1].toUpperCase(), a: m[2].replace('♯', '#').replace('♭', 'b'), m: !!m[3] } : { r: '', a: '', m: false }; };
+  const st = parse(song.key);
+  p.innerHTML = `<div class="kr"><b>คีย์</b><input id="kbk" maxlength="8" autocomplete="off" value="${esc(song.key || '')}" aria-label="คีย์"><button data-k="clear">ล้าง</button></div>
+    <div class="kr kk">${'CDEFGAB'.split('').map(l => `<button data-r="${l}">${l}</button>`).join('')}<button data-a="#">♯</button><button data-a="b">♭</button><button data-mn="1">m</button></div>
+    <div class="kr"><b>ความเร็ว</b><button data-b="-1">−</button><div class="kv"><input id="kbb" type="number" inputmode="numeric" min="30" max="240" value="${song.bpm || ''}" placeholder="BPM" aria-label="BPM"></div><button data-b="1">+</button><button class="tap" data-tap="1">แตะตามจังหวะ</button></div>
+    <div class="kr kh"><small>แตะ “แตะตามจังหวะ” 4–5 ครั้งตามเพลง แอปคำนวณให้ · จุดไฟกระพริบจะอยู่มุมขวาบนของโน้ต</small></div>`;
+  $('#app').append(p); setTimeout(() => document.addEventListener('pointerdown', metaOutside, true), 0);
+  const paintKey = () => { $('#kbk', p).value = st.r ? st.r + st.a + (st.m ? 'm' : '') : $('#kbk', p).value; p.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('on', b.dataset.r === st.r)); p.querySelectorAll('[data-a]').forEach(b => b.classList.toggle('on', b.dataset.a === st.a)); p.querySelector('[data-mn]').classList.toggle('on', st.m); };
+  const saveKey = () => { song.key = $('#kbk', p).value.trim(); metaSave(song); };
+  const setBpm = v => { v = Math.round(+v); if (!(v >= 30)) { if (!v) { delete song.bpm; $('#kbb', p).value = ''; metaSave(song); } return; } v = Math.min(240, v); song.bpm = v; $('#kbb', p).value = v; metaSave(song); };
+  paintKey();
+  p.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (b.dataset.r) { st.r = b.dataset.r; paintKey(); saveKey(); }
+    else if (b.dataset.a) { st.a = st.a === b.dataset.a ? '' : b.dataset.a; if (!st.r) st.r = 'C'; paintKey(); saveKey(); }
+    else if (b.dataset.mn) { st.m = !st.m; if (!st.r) st.r = 'C'; paintKey(); saveKey(); }
+    else if (b.dataset.k === 'clear') { st.r = ''; st.a = ''; st.m = false; $('#kbk', p).value = ''; paintKey(); saveKey(); }
+    else if (b.dataset.b) setBpm((song.bpm || 90) + (+b.dataset.b));
+    else if (b.dataset.tap) {
+      const now = performance.now(); if (TAPS.length && now - TAPS[TAPS.length - 1] > 2500) TAPS.length = 0; TAPS.push(now); if (TAPS.length > 8) TAPS.shift();
+      if (TAPS.length >= 2) setBpm(60000 / ((TAPS[TAPS.length - 1] - TAPS[0]) / (TAPS.length - 1)));
+    }
+  });
+  $('#kbk', p).addEventListener('input', () => { Object.assign(st, parse($('#kbk', p).value)); p.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('on', b.dataset.r === st.r)); saveKey(); });
+  $('#kbb', p).addEventListener('change', e => setBpm(e.target.value));
+  setTimeout(() => (which === 'bpm' ? $('#kbb', p) : null)?.select?.(), 50);
+}
 async function saveEditName() {
   const song = curSong(), i = $('#enmi'); if (!song || !i) return;
   let n = nfc(i.value).replace(/\s+/g, ' ').trim();
@@ -1035,9 +1079,9 @@ async function saveEditName() {
 }
 function enterEdit() {
   if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
-  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
+  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; dotPaint(); etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
 }
-async function exitEdit() { if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
+async function exitEdit() { closeMeta(); if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
 function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); toast(ANN.show ? 'แสดงรอยที่วาด: เปิด' : 'แสดงรอยที่วาด: ปิด (ยังบันทึกไว้)'); }
 
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
@@ -1173,7 +1217,8 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
-  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
+  sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad();
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});

@@ -267,3 +267,23 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbl button b{display:block;font-size:.95rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #setbar .sbl button small{opacity:.75;font-size:.75rem}
 #setbar .sbl button.on{background:var(--ac);color:var(--acink);border-color:transparent}
+
+/* key + tempo */
+#enm{flex-wrap:wrap}
+#enm .enc{flex:0 0 100%;display:flex;gap:6px;padding:0 4px 4px 0}
+#enm .enc button{flex:1;width:auto;height:28px;border-radius:10px;font-size:.74rem;font-weight:700;background:var(--s2);color:var(--ink);white-space:nowrap}
+#bpmdot{position:absolute;top:10px;right:14px;z-index:20;display:flex;align-items:center;gap:5px;pointer-events:none;font-size:.68rem;font-weight:700;color:rgba(30,40,34,.55)}
+#bpmdot[hidden]{display:none}
+#bpmdot i{width:11px;height:11px;border-radius:50%;background:#2fbf71;opacity:.25}
+@keyframes bpmflash{0%{opacity:1;box-shadow:0 0 7px #2fbf71}16%{opacity:.25;box-shadow:none}100%{opacity:.25}}
+#kbp{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));z-index:50;width:min(560px,calc(100% - 24px));padding:12px 14px;border-radius:20px;background:rgba(16,27,21,.98);border:1px solid var(--line);box-shadow:0 8px 28px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:10px}
+#kbp .kr{display:flex;align-items:center;gap:6px}
+#kbp .kr>b{flex:none;width:64px;font-size:.82rem;color:var(--mut,#9bb)}
+#kbp button{height:42px;min-width:42px;padding:0 10px;border-radius:12px;background:var(--s2);color:var(--ink);font-weight:700;font-size:.9rem}
+#kbp button.on{background:var(--ac);color:var(--acink)}
+#kbp .kk{flex-wrap:wrap}
+#kbp input{height:42px;border-radius:12px;background:var(--s2);border:1px solid var(--line);color:var(--ink);font:inherit;font-weight:700;text-align:center;min-width:0}
+#kbp #kbk{flex:1}
+#kbp .kv{flex:none;width:96px}#kbp .kv input{width:100%}
+#kbp .tap{flex:1;background:var(--ac);color:var(--acink)}
+#kbp .kh small{color:var(--mut,#9bb);font-size:.72rem}
