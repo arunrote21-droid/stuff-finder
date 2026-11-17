@@ -314,3 +314,6 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #songtag{position:absolute;top:8px;left:12px;z-index:20;max-width:55%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;pointer-events:none;font-size:.82rem;font-weight:700;color:rgba(20,28,24,.6);text-shadow:0 0 3px rgba(255,255,255,.9),0 0 6px rgba(255,255,255,.6)}
 #songtag[hidden]{display:none}
 #app:not(.reading) #songtag{display:none}
+
+/* song name as a small green pill with white text: readable on any page */
+#songtag{top:8px;left:10px;padding:3px 12px;border-radius:999px;background:rgba(27,122,82,.82);color:#fff;text-shadow:none;font-size:.85rem;font-weight:700}
