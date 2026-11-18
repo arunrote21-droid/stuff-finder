@@ -328,3 +328,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #bpmdot i::after{content:"";position:absolute;inset:-6px;border-radius:50%;box-shadow:0 0 16px 5px rgba(76,217,135,.9);opacity:0;animation:bpmglow 1s linear infinite;animation-duration:inherit}
 @keyframes bpmglow{0%{opacity:1}18%{opacity:0}100%{opacity:0}}
 @keyframes bpmflash{0%{opacity:1}18%{opacity:.3}100%{opacity:.3}}
+
+#kbp .kq{flex-wrap:wrap;gap:6px}
+#kbp .kq{flex-wrap:nowrap;gap:4px}
+#kbp .kq button{flex:1;min-width:0;height:36px;padding:0;font-size:.95rem}

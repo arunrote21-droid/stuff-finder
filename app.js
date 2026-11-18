@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-a';
+const BUILD = 'sheet-2026-11-18-b';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1098,18 +1098,24 @@ function openMeta(which) {
   p.innerHTML = `<div class="kr"><b>คีย์</b><input id="kbk" maxlength="8" autocomplete="off" value="${esc(song.key || '')}" aria-label="คีย์"><button data-k="clear">ล้าง</button></div>
     <div class="kr kk">${'CDEFGAB'.split('').map(l => `<button data-r="${l}">${l}</button>`).join('')}<button data-a="#">♯</button><button data-a="b">♭</button><button data-mn="1">m</button></div>
     <div class="kr"><b>ความเร็ว</b><button data-b="-1">−</button><div class="kv"><input id="kbb" type="number" inputmode="numeric" min="30" max="240" value="${song.bpm || ''}" placeholder="BPM" aria-label="BPM"></div><button data-b="1">+</button><button class="tap" data-tap="1">แตะตามจังหวะ</button></div>
+    <div class="kr kq">${'1234567890'.split('').map(d => `<button data-dg="${d}">${d}</button>`).join('')}<button data-dg="x" aria-label="ลบ">⌫</button></div>
     <div class="kr kh"><small>แตะ “แตะตามจังหวะ” 4–5 ครั้งตามเพลง แอปคำนวณให้ · จุดไฟกระพริบจะอยู่มุมขวาบนของโน้ต</small></div>`;
   $('#app').append(p); setTimeout(() => document.addEventListener('pointerdown', metaOutside, true), 0);
+  let kbuf = '', kfresh = true; const paintBq = () => { kfresh = true; kbuf = song.bpm ? String(song.bpm) : ''; };
   const paintKey = () => { $('#kbk', p).value = st.r ? st.r + st.a + (st.m ? 'm' : '') : $('#kbk', p).value; p.querySelectorAll('[data-r]').forEach(b => b.classList.toggle('on', b.dataset.r === st.r)); p.querySelectorAll('[data-a]').forEach(b => b.classList.toggle('on', b.dataset.a === st.a)); p.querySelector('[data-mn]').classList.toggle('on', st.m); };
   const saveKey = () => { song.key = $('#kbk', p).value.trim(); metaSave(song); };
-  const setBpm = v => { v = Math.round(+v); if (!(v >= 30)) { if (!v) { delete song.bpm; $('#kbb', p).value = ''; metaSave(song); } return; } v = Math.min(240, v); song.bpm = v; $('#kbb', p).value = v; metaSave(song); };
-  paintKey();
+  const setBpm = v => { v = Math.round(+v); if (!(v >= 30)) { if (!v) { delete song.bpm; $('#kbb', p).value = ''; paintBq(); metaSave(song); } return; } v = Math.min(240, v); song.bpm = v; $('#kbb', p).value = v; paintBq(); metaSave(song); };
+  paintKey(); paintBq();
   p.addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     if (b.dataset.r) { st.r = b.dataset.r; paintKey(); saveKey(); }
     else if (b.dataset.a) { st.a = st.a === b.dataset.a ? '' : b.dataset.a; if (!st.r) st.r = 'C'; paintKey(); saveKey(); }
     else if (b.dataset.mn) { st.m = !st.m; if (!st.r) st.r = 'C'; paintKey(); saveKey(); }
     else if (b.dataset.k === 'clear') { st.r = ''; st.a = ''; st.m = false; $('#kbk', p).value = ''; paintKey(); saveKey(); }
+    else if (b.dataset.dg) {
+      const d = b.dataset.dg; if (d === 'x') kbuf = kbuf.slice(0, -1); else { if (kfresh || kbuf.length >= 3) kbuf = d; else kbuf += d; if (+kbuf > 240) kbuf = d; } kfresh = false;
+      $('#kbb', p).value = kbuf; if (+kbuf >= 30) setBpm(kbuf);
+    }
     else if (b.dataset.b) setBpm((song.bpm || 90) + (+b.dataset.b));
     else if (b.dataset.tap) {
       const now = performance.now(); if (TAPS.length && now - TAPS[TAPS.length - 1] > 2500) TAPS.length = 0; TAPS.push(now); if (TAPS.length > 8) TAPS.shift();
