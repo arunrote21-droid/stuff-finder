@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-i';
+const BUILD = 'sheet-2026-11-18-j';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -698,21 +698,42 @@ function setBarHtml() {
 }
 
 /* type or paste a list of song names (one per line) and get a set; also share a set as plain text */
-const LINE_NUM = /^\s*(?:\d{1,3}\s*[.)\-:：]|[-•*·●▪]+)\s*/, LINE_KEY = /\s*[·|]\s*[A-Ga-g][#♯b♭]?m?\s*$/;
+const LINE_NUM = /^\s*(?:\d{1,3}\s*[.)\-:：]|[-•*·●▪]+)\s*/, KEY_TAIL = /(?:^|(?<=[\s฀-๿·|]))\s*([A-G](?:#|♯|b|♭)?(?:m|min)?)\s*$/;
+const ALIAS = { map: {} }; // names you fixed once are remembered: typed name -> song id
+async function aliasLoad() { try { const v = await TH.get('alias:list'); if (v && typeof v === 'object') ALIAS.map = v; } catch { /* none yet */ } }
+const aliasKey = t => wishNorm(t);
 function parseList(text) {
-  let title = ''; const lines = [];
-  for (const raw of String(text || '').split(/\r?\n/)) {
-    let t = nfc(raw).trim(); if (!t) continue;
-    const m = /^(?:ชุดเล่น|ชุด|set)\s*[:：]\s*(.+)$/i.exec(t); if (m && !lines.length && !title) { title = m[1].trim(); continue; }
-    t = t.replace(LINE_NUM, '').replace(LINE_KEY, '').trim(); if (t) lines.push(t);
+  const raws = String(text || '').split(/\r?\n/).map(x => nfc(x).trim()).filter(Boolean);
+  const isSection = t => /^\s*(?:\d{1,3}\s*[.)\-:：]?\s*)?[(（\[【].*[)）\]】]\s*$/.test(t);
+  let title = '', first = 0;
+  const m0 = raws.length && /^(?:ชุดเล่น|ชุด|set)\s*[:：]\s*(.+)$/i.exec(raws[0]);
+  if (m0) { title = m0[1].trim(); first = 1; }
+  else if (raws.length > 1 && !LINE_NUM.test(raws[0]) && raws.some(isSection) ) { title = raws[0]; first = 1; }
+  else if (raws.length > 2 && !LINE_NUM.test(raws[0]) && raws.slice(1).filter(t => LINE_NUM.test(t)).length >= Math.max(2, (raws.length - 1) * 0.6)) { title = raws[0]; first = 1; }
+  const items = [];
+  for (const raw of raws.slice(first)) {
+    if (isSection(raw)) continue;
+    let t = raw.replace(LINE_NUM, '').trim(); if (!t) continue;
+    const full = t; let who = '', key = '';
+    const km = KEY_TAIL.exec(t); if (km && t.length > km[1].length + 1) { key = km[1].replace('♯', '#').replace('♭', 'b').replace(/min$/, 'm'); t = t.slice(0, km.index).trim(); }
+    const wm = /^([A-Za-z])(?=\s|[฀-๿])\s*/.exec(t); if (wm && t.length > wm[0].length) { who = wm[1].toUpperCase(); t = t.slice(wm[0].length).trim(); }
+    if (!t || (t.length < 2 && !/[฀-๿0-9]/.test(t))) continue; // a lone "T" or "K" is just a placeholder
+    items.push({ line: t, full, key, who });
   }
-  return { title, lines };
+  return { title, items };
 }
-function matchLine(line, idx) { // best library matches for one typed line, most likely first
-  const q = wishNorm(line); if (!q) return [];
-  const out = [];
-  for (const it of idx) { const n = it.n; let r = -1; if (n === q) r = 0; else if (n.startsWith(q)) r = 1; else if (n.includes(q)) r = 2; else if (q.includes(n) && n.length >= 3) r = 3; if (r >= 0) out.push([r, n.length, it.s]); }
-  out.sort((a, b) => a[0] - b[0] || a[1] - b[1]); return out.slice(0, 8).map(x => x[2]);
+function matchLine(item, idx) { // best library matches for one list line, most likely first
+  const tries = [item.line, item.full].filter((v, i, a) => v && a.indexOf(v) === i), seen = new Set(), out = [];
+  const al = ALIAS.map[aliasKey(item.line)]; if (al && S.songs.has(al)) { out.push(S.songs.get(al)); seen.add(al); }
+  const kk = (item.key || '').toLowerCase();
+  for (const line of tries) {
+    const q = wishNorm(line); if (!q) continue; const part = [];
+    for (const it of idx) { if (seen.has(it.s.id)) continue; const n = it.n; let r = -1; if (n === q) r = 0; else if (n.startsWith(q)) r = 1; else if (n.includes(q)) r = 2; else if (q.includes(n) && n.length >= 3) r = 3; if (r >= 0) { const km = kk && ((it.s.key || '').toLowerCase() === kk || n.endsWith(' ' + kk)) ? 0 : 1; part.push([r, km, n.length, it.s]); } }
+    part.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
+    for (const p of part) { if (!seen.has(p[3].id)) { seen.add(p[3].id); out.push(p[3]); } }
+    if (out.length) break;
+  }
+  return out.slice(0, 8);
 }
 function pickSong(line, idx, current) { // search the whole library and choose the right song for one line
   return new Promise(res => {
@@ -741,11 +762,11 @@ function openListPaste(initial) {
   const paint = () => {
     const ok = rows.filter(r => fin(r)).length;
     $('#lres', s.el).innerHTML = rows.map((r, i) => { const f = fin(r);
-      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button></div>`
-        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button></div>`; }).join('');
+      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}${r.key ? ' · คีย์ ' + esc(r.key) : ''}${r.who ? ' · ' + esc(r.who) : ''}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button></div>`
+        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}${r.key ? ' · คีย์ ' + esc(r.key) : ''}${r.who ? ' · ' + esc(r.who) : ''}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button></div>`; }).join('');
     const go = $('#ltgo', s.el); go.disabled = !ok; go.textContent = ok ? `สร้างชุด (${ok} เพลง${rows.length > ok ? ` · ไม่ใส่ ${rows.length - ok}` : ''})` : 'สร้างชุด';
   };
-  const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.lines.map(line => ({ line, c: matchLine(line, idx), sel: null, skip: false })); paint(); };
+  const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.items.map(it => { const c = matchLine(it, idx); const whole = c[0] && (it.key || it.who) && wishNorm(c[0].name) === wishNorm(it.full); return { line: whole ? it.full : it.line, key: whole ? '' : it.key, who: whole ? '' : it.who, c, sel: null, skip: false }; }); paint(); };
   $('#lt', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(parse, 200); });
   $('#ltclear', s.el).onclick = () => { const t = $('#lt', s.el); t.value = ''; t.focus(); parse(); };
   $('#ltpaste', s.el).onclick = async () => { try { $('#lt', s.el).value = await navigator.clipboard.readText(); parse(); } catch { toast('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก “วาง”'); } };
@@ -755,13 +776,15 @@ function openListPaste(initial) {
     const ids = rows.map(fin).filter(Boolean).map(x => x.id); if (!ids.length) return;
     if ($('#ltwish', s.el).checked) rows.filter(r => !fin(r) && !r.skip).forEach(r => wishAdd(r.line, true));
     let name = title || nextSetName(); if (S.sets.some(z => z.name === name)) { let k = 2; while (S.sets.some(z => z.name === name + ' (' + k + ')')) k++; name += ' (' + k + ')'; }
-    const rec = { id: uid(), name, songs: ids }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
+    const notes = {}; for (const r of rows) { const f = fin(r); if (f && (r.key || r.who)) notes[f.id] = { ...(r.key ? { key: r.key } : {}), ...(r.who ? { who: r.who } : {}) }; if (f && r.sel) ALIAS.map[aliasKey(r.line)] = f.id; }
+    try { await TH.put('alias:list', ALIAS.map); } catch { /* optional */ }
+    const rec = { id: uid(), name, songs: ids, notes }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
   };
   if (initial) { $('#lt', s.el).value = initial; parse(); }
 }
 function setShareText() {
   const act = activeSet(), ids = act ? act.songs : S.queue; if (!ids.length) return '';
-  return `ชุด: ${act ? act.name : 'คิวเล่น'}\n` + ids.map(i => S.songs.get(i)).filter(Boolean).map((x, k) => `${k + 1}. ${x.name}${x.key ? ' · ' + x.key : ''}`).join('\n');
+  return `ชุด: ${act ? act.name : 'คิวเล่น'}\n` + ids.map(i => S.songs.get(i)).filter(Boolean).map((x, k) => { const n = noteFor(x), key = (n && n.key) || x.key || ''; return `${k + 1}. ${n && n.who ? n.who + ' ' : ''}${x.name}${key ? ' · ' + key : ''}`; }).join('\n');
 }
 function setItems() { const act = activeSet(), ids = act ? act.songs : S.queue; return { title: act ? act.name : 'คิวเล่น', songs: ids.map(i => S.songs.get(i)).filter(Boolean) }; }
 const shareMarksOn = () => { try { return localStorage.getItem('sheet:sharemarks') !== '0'; } catch { return true; } };
@@ -1201,7 +1224,8 @@ function endCrop(reload) {
 }
 /* key + tempo per song: chips in the edit bar, a small panel to set them, and a quiet blinking dot on the score */
 const TAPS = [];
-const withKey = x => x.name + (x.key ? ' · ' + x.key : '');
+const noteFor = x => { const a = activeSet(); return (a && a.notes && a.notes[x.id]) || null; };
+const withKey = x => { const n = noteFor(x), k = (n && n.key) || x.key || ''; return x.name + (k ? ' · ' + k : '') + (n && n.key && x.key && n.key !== x.key ? ` (โน้ต ${x.key})` : '') + (n && n.who ? ' · ' + n.who : ''); };
 function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
 function dotPaint() {
   tagPaint();
@@ -1403,7 +1427,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const st = document.createElement('div'); st.id = 'songtag'; st.hidden = true; $('#stage').append(st); }
   { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
-  wishLoad();
+  wishLoad(); aliasLoad();
   loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   window.__sheet = { S, DB, CROP, inkBox, ANN };
