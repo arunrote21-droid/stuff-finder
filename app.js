@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-e';
+const BUILD = 'sheet-2026-11-18-f';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -694,8 +694,7 @@ function setBarOutside(e) { if (!e.target.closest('#setbar,#qsetBtn,.scrim')) cl
 function setBarHtml() {
   const act = activeSet();
   const cards = S.sets.map(x => `<button class="sc ${x.name === S.setName ? 'on' : ''}" data-sid="${x.id}"><b>${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small><span class="sx" data-del="${x.id}" aria-label="ลบชุด">✕</span></button>`).join('');
-  return '<div class="sbh">ชุดเล่น · แตะเพื่อเปิด · กดค้างเพื่อเปลี่ยนชื่อ · ✕ ลบชุด <button class="sbm" data-marks="1">แนบรอยที่เขียน: ' + (shareMarksOn() ? 'เปิด' : 'ปิด') + '</button></div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button><button class="sn o" data-list="1"><b>✎ พิมพ์รายการ</b><small>วางชื่อเพลงทีละบรรทัด</small></button>'
-    + (S.queue.length ? '<button class="sn o" data-sharesong="1"><b>⇪ ส่งโน้ตเพลงนี้</b><small>รูปทุกหน้า · AirDrop / LINE</small></button><button class="sn o" data-shareset="1"><b>⇪ ส่งโน้ตทั้งชุด</b><small>รูปของทุกเพลง</small></button><button class="sn o" data-sharetext="1"><b>⇪ ส่งรายชื่อ</b><small>เป็นข้อความ</small></button>' : '') + (!act && S.queue.length ? '<button class="sn o" data-savecur="1"><b>⤓ บันทึกคิวนี้</b><small>เป็นชุดใหม่</small></button>' : '') + cards + '</div>';
+  return '<div class="sbh"><span>แตะเพื่อเปิดชุด · กดค้างเพื่อเปลี่ยนชื่อ</span><button class="sbm" data-more="1">⋯ เพิ่มเติม</button></div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button>' + cards + '</div>';
 }
 
 /* type or paste a list of song names (one per line) and get a set; also share a set as plain text */
@@ -788,6 +787,21 @@ async function shareSet() { // the set as plain text, for people who use the app
   try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(text); toast('คัดลอกรายการแล้ว ส่งต่อได้เลย'); } catch { toast('ส่งไม่ได้ ลองใหม่อีกครั้ง'); }
 }
+function openSetMore() { // the less-used things (typing a list, sending) live one tap deeper so the set bar stays only about sets
+  const act = activeSet(), hasQ = S.queue.length > 0;
+  const s = sheet(`<h3>ชุดเล่น · เพิ่มเติม</h3><div class="menu">
+    <button data-sm="list"><span class="ic">✎</span><span>พิมพ์รายการเพลง<small>วางชื่อเพลงทีละบรรทัดแล้วสร้างชุด</small></span></button>
+    ${!act && hasQ ? '<button data-sm="savecur"><span class="ic">⤓</span><span>บันทึกคิวนี้เป็นชุด<small>เก็บคิวที่มีอยู่เป็นชุดใหม่</small></span></button>' : ''}
+    ${hasQ ? `<button data-sm="song"><span class="ic">⇪</span><span>ส่งโน้ตเพลงนี้<small>รูปทุกหน้า · AirDrop / LINE</small></span></button>
+    <button data-sm="set"><span class="ic">⇪</span><span>ส่งโน้ตทั้งชุด<small>รูปของทุกเพลงในชุดหรือคิว</small></span></button>
+    <button data-sm="text"><span class="ic">⇪</span><span>ส่งรายชื่อเป็นข้อความ<small>สำหรับคนที่ใช้โน้ตเนตรเหมือนกัน</small></span></button>` : ''}
+    <button data-sm="marks"><span class="ic">✎</span><span>แนบรอยที่เขียนตอนส่งรูป<small id="smk">${shareMarksOn() ? 'เปิดอยู่ รูปมีไฮไลต์ ปากกา และการครอป' : 'ปิดอยู่ ส่งต้นฉบับสะอาด'}</small></span></button></div>`);
+  s.el.addEventListener('click', e => {
+    const b = e.target.closest('[data-sm]'); if (!b) return; const k = b.dataset.sm;
+    if (k === 'marks') { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } $('#smk', s.el).textContent = on ? 'เปิดอยู่ รูปมีไฮไลต์ ปากกา และการครอป' : 'ปิดอยู่ ส่งต้นฉบับสะอาด'; return; }
+    s.close(); if (k === 'list') openListPaste(); else if (k === 'savecur') newSet(true); else if (k === 'song') shareScores(false); else if (k === 'set') shareScores(true); else if (k === 'text') shareSet();
+  });
+}
 function nextSetName() { let n = 1; while (S.sets.some(x => x.name === 'ชุดใหม่ ' + n)) n++; return 'ชุดใหม่ ' + n; }
 async function newSet(fromQueue) {
   const prev = { q: [...S.queue], c: S.cur, p: S.page, n: S.setName }, rec = { id: uid(), name: nextSetName(), songs: fromQueue ? [...S.queue] : [] };
@@ -812,12 +826,7 @@ function toggleSetBar() {
   bar.addEventListener('click', async e => {
     if (fired) { fired = false; return; }
     if (e.target.closest('[data-new]')) { closeSetBar(); newSet(false); return; }
-    if (e.target.closest('[data-savecur]')) { closeSetBar(); newSet(true); return; }
-    if (e.target.closest('[data-list]')) { closeSetBar(); openListPaste(); return; }
-    if (e.target.closest('[data-sharesong]')) { closeSetBar(); shareScores(false); return; }
-    if (e.target.closest('[data-shareset]')) { closeSetBar(); shareScores(true); return; }
-    if (e.target.closest('[data-sharetext]')) { closeSetBar(); shareSet(); return; }
-    if (e.target.closest('[data-marks]')) { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } e.target.closest('[data-marks]').textContent = 'แนบรอยที่เขียน: ' + (on ? 'เปิด' : 'ปิด'); return; }
+    if (e.target.closest('[data-more]')) { closeSetBar(); openSetMore(); return; }
     const d = e.target.closest('[data-del]');
     if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (!x) return;
       if (await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); if ($('#setbar')) bar.innerHTML = setBarHtml(); toast(`ลบชุด “${x.name}” แล้ว`); }
