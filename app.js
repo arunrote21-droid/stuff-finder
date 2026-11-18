@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-g';
+const BUILD = 'sheet-2026-11-18-h';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -716,13 +716,13 @@ function matchLine(line, idx) { // best library matches for one typed line, most
 }
 function pickSong(line, idx, current) { // search the whole library and choose the right song for one line
   return new Promise(res => {
-    const s = sheet(`<h3>เลือกเพลง</h3><p class="sub">สำหรับ “${esc(line)}”</p><input class="field" id="pq" autocomplete="off" placeholder="ค้นหาชื่อเพลง…" value="${esc(stripHints(line))}"><div id="pres" class="lres" style="max-height:48vh"></div><div class="row2"><button class="btn o" data-r="skip">ข้ามเพลงนี้</button><button class="btn o" data-r="cancel">ยกเลิก</button></div>`, { onclose: () => res(undefined) });
+    const s = sheet(`<h3>เลือกเพลง</h3><p class="sub">สำหรับ “${esc(line)}”</p><div class="fx"><input class="field" id="pq" autocomplete="off" placeholder="ค้นหาชื่อเพลง…" value="${esc(stripHints(line))}"><button class="fxb" id="pqx" aria-label="ลบชื่อ">✕</button></div><div id="pres" class="lres" style="max-height:48vh"></div><div class="row2"><button class="btn o" data-r="skip">ข้ามเพลงนี้</button><button class="btn o" data-r="cancel">ยกเลิก</button></div>`, { onclose: () => res(undefined) });
     const paint = () => {
       const terms = wishNorm($('#pq', s.el).value).split(/\s+/).filter(Boolean);
       const list = idx.filter(it => terms.every(t => it.n.includes(t))).sort((x, y) => (+!x.n.startsWith(terms[0] || '')) - (+!y.n.startsWith(terms[0] || '')) || x.n.length - y.n.length).slice(0, 40);
       $('#pres', s.el).innerHTML = list.length ? list.map(it => `<div class="lr pk" data-id="${it.s.id}"><div class="lm"><b>${hl(it.s.name, terms)}</b><small>${it.s.n} หน้า${current && current.id === it.s.id ? ' · เลือกอยู่' : ''}</small></div></div>`).join('') : '<p class="sub">ไม่พบเพลงที่ตรงกัน ลองพิมพ์คำสั้น ๆ</p>';
     };
-    let tm = 0; $('#pq', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(paint, 150); }); paint();
+    let tm = 0; $('#pq', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(paint, 150); }); $('#pqx', s.el).onclick = () => { const i = $('#pq', s.el); i.value = ''; i.focus(); paint(); }; paint();
     s.el.addEventListener('click', e => {
       const r = e.target.closest('[data-r]'); if (r) { const v = r.dataset.r === 'skip' ? null : undefined; res(v); s.close(); return; }
       const p = e.target.closest('.pk'); if (p) { const song = S.songs.get(p.dataset.id); res(song); s.close(); }
@@ -732,7 +732,7 @@ function pickSong(line, idx, current) { // search the whole library and choose t
 function openListPaste(initial) {
   const s = sheet(`<h3>พิมพ์รายการเพลง</h3><p class="sub">บรรทัดละเพลง พิมพ์เองหรือวางที่คัดลอกมา (ตัดเลขลำดับให้เอง)</p>
     <textarea class="field" id="lt" rows="6" placeholder="แค่มี&#10;รักนานๆ&#10;หากันจนเจอ" style="width:100%;resize:vertical"></textarea>
-    <div class="row2"><button class="btn o sm" id="ltpaste">วางจากที่คัดลอก</button></div>
+    <div class="row2"><button class="btn o sm" id="ltpaste">วางจากที่คัดลอก</button><button class="btn o sm" id="ltclear">ล้างทั้งหมด</button></div>
     <div id="lres" class="lres"></div>
     <label class="lw"><input type="checkbox" id="ltwish" checked> จดเพลงที่หาไม่เจอไว้ใน “เพลงที่ยังไม่มีโน้ต”</label>
     <div class="row2"><button class="btn" id="ltgo" disabled>สร้างชุด</button></div>`);
@@ -747,6 +747,7 @@ function openListPaste(initial) {
   };
   const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.lines.map(line => ({ line, c: matchLine(line, idx), sel: null, skip: false })); paint(); };
   $('#lt', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(parse, 200); });
+  $('#ltclear', s.el).onclick = () => { const t = $('#lt', s.el); t.value = ''; t.focus(); parse(); };
   $('#ltpaste', s.el).onclick = async () => { try { $('#lt', s.el).value = await navigator.clipboard.readText(); parse(); } catch { toast('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก “วาง”'); } };
   $('#lres', s.el).addEventListener('click', async e => { const b = e.target.closest('[data-sw]'); if (!b) return; const r = rows[+b.dataset.sw];
     const v = await pickSong(r.line, idx, fin(r)); if (v === undefined) return; if (v === null) { r.skip = true; r.sel = null; } else { r.skip = false; r.sel = v; } paint(); });

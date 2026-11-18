@@ -351,3 +351,6 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbm{margin-left:0;flex:none}
 
 .lr.pk{cursor:pointer}.lr.pk:active{background:var(--s2)}
+
+.fx{position:relative}.fx .field{width:100%;padding-right:48px}
+.fx .fxb{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:34px;height:34px;border-radius:50%;background:var(--s2);color:var(--ink);font-size:.85rem}
