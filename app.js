@@ -7,7 +7,16 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-17-y';
+const BUILD = 'sheet-2026-11-18-a';
+/* quiet activity log: the last events are kept so we can see what happened before a freeze */
+const LOG = { a: [], prev: [], prevClean: true };
+try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
+function logEv(t) { LOG.a.push(new Date().toTimeString().slice(0, 8) + ' ' + t); if (LOG.a.length > 50) LOG.a.shift(); try { localStorage.setItem('sheet:log', JSON.stringify(LOG.a)); } catch { /* storage blocked */ } }
+logEv('เปิดแอป ' + BUILD);
+window.addEventListener('error', e => logEv('ผิดพลาด: ' + String(e.message || '').slice(0, 80)));
+window.addEventListener('unhandledrejection', e => logEv('ผิดพลาด(promise): ' + String((e.reason && e.reason.message) || e.reason || '').slice(0, 80)));
+document.addEventListener('visibilitychange', () => { const h = document.visibilityState === 'hidden'; try { localStorage.setItem('sheet:clean', h ? '1' : '0'); } catch { /* ok */ } logEv(h ? 'ออกจากแอป/พักจอ' : 'กลับมาที่แอป'); });
+window.addEventListener('pagehide', () => { try { localStorage.setItem('sheet:clean', '1'); } catch { /* ok */ } });
 const IMG_EXT = /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i;
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 const baseName = p => p.split('/').pop();
@@ -191,7 +200,7 @@ async function inkBox(id, page) {
   return box;
 }
 function applyZoom() {
-  const img = $('#pg'); img.style.transformOrigin = '0 0';
+  const img = $('#pg'); img.style.transformOrigin = '0 0'; img.style.willChange = 'transform'; clearTimeout(applyZoom.t); applyZoom.t = setTimeout(() => { img.style.willChange = 'auto'; if (Z.s > 1.05) logEv('ซูม x' + Z.s.toFixed(1)); }, 700);
   const base = cropBase(), z = (Z.s === 1 && !Z.tx && !Z.ty) ? '' : `translate(${Z.tx}px,${Z.ty}px) scale(${Z.s})`;
   img.style.transform = (z + ' ' + base).trim();
   for (const sv of [$('#annsvg'), $('#annsvgn')]) if (sv) { sv.style.transformOrigin = '0 0'; sv.style.transform = img.style.transform; }
@@ -212,7 +221,7 @@ let imgUrl = null, pageToken = 0; const urlCache = new Map();
 function rememberUrl(key, blob) {
   if (urlCache.has(key)) return urlCache.get(key);
   const u = URL.createObjectURL(blob); urlCache.set(key, u);
-  while (urlCache.size > 6) { const k = urlCache.keys().next().value; URL.revokeObjectURL(urlCache.get(k)); urlCache.delete(k); }
+  while (urlCache.size > 4) { const k = urlCache.keys().next().value; URL.revokeObjectURL(urlCache.get(k)); urlCache.delete(k); }
   return u;
 }
 async function pageUrl(song, i) {
@@ -237,7 +246,7 @@ async function showPage() {
   const [url, box, man] = await Promise.all([pageUrl(song, S.page), CROP.on ? inkBox(song.id, S.page) : null, cropGet(song.id, S.page)]); if (tok !== pageToken) return;
   CROP.manual = !!man; CROP.box = man || box; await annSetPage(song, S.page); if (tok !== pageToken) return;
   if (url) img.src = url; else img.removeAttribute('src');
-  applyZoom(); annRender(); dotPaint(); $('#editBtn').hidden = false;
+  applyZoom(); annRender(); dotPaint(); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
   const next = S.songs.get(S.queue[S.cur + 1]);
@@ -261,12 +270,13 @@ function renderAll() { renderTop(); renderStrip(); showPage(); if (S.searching) 
 
 /* ───────────── search panel ───────────── */
 function openSearch() {
+  logEv('เปิดค้นหา');
   S.searching = true; S.q = ''; S.shown = 120; $('#app').classList.remove('reading');
   $('#app').classList.add('searching');
   $('#panel').innerHTML = `<div class="phead"><div class="sbox"><span aria-hidden="true">⌕</span><input id="qi" type="text" placeholder="พิมพ์ชื่อเพลง…" autocomplete="off" autocapitalize="off" enterkeyhint="search"><button class="clr" data-act="qclear" aria-label="ล้าง">✕</button></div><button class="ib" data-act="closesearch">ปิด</button></div><div class="phint">แตะ = เพิ่มแล้วปิด · กดค้าง = เพิ่มต่อ</div><div class="webrow"><span>ค้นเว็บ</span><button data-act="web" data-k="g">Google</button><button data-act="web" data-k="y">YouTube</button><button data-act="web" data-k="o">Opera</button></div><div class="res" id="res"></div>`;
   renderResults(); $('#qi').focus();
 }
-function closeSearch() { S.searching = false; $('#app').classList.remove('searching'); setTimeout(() => { if (!S.searching) $('#panel').innerHTML = ''; }, 420); document.activeElement?.blur?.(); showPage(); chromeArm(); }
+function closeSearch() { logEv('ปิดค้นหา'); S.searching = false; $('#app').classList.remove('searching'); setTimeout(() => { if (!S.searching) $('#panel').innerHTML = ''; }, 420); document.activeElement?.blur?.(); showPage(); chromeArm(); }
 /* words such as "คอด" / "โน้ต" are typed only to steer the web search; they are not part of a song name */
 const HINT_WORDS = /(^|\s)(คอด|คอร์ด|คอร์ท|โน้ต|โน๊ต|โน้ตเพลง|chord|chords|sheet|note|notes)(?=\s|$)/gi;
 const stripHints = t => nfc(t).replace(HINT_WORDS, ' ').replace(/\s+/g, ' ').trim();
@@ -462,6 +472,7 @@ function quickPick() {
 }
 const natCmp = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
 async function quickImport(files) {
+  logEv('นำเข้า ' + files.length + ' ไฟล์');
   const isZip = f => /\.zip$/i.test(f.name) || f.type.includes('zip');
   if (files.some(isZip) || !files.every(f => IMG_EXT.test(f.name) || f.type.startsWith('image/'))) { // zip (or mixed): same engine as the menu import, started for you
     openImport(); const s = S.importSheet; await scanFiles(files, s);
@@ -532,6 +543,7 @@ function renderReview(s, st) {
   $('#goImp', s.el).onclick = () => runImport(s, st);
 }
 async function runImport(s, st) {
+  logEv('นำเข้าชุดใหญ่เริ่ม');
   const rows = st.rows.filter(r => r.checked), total = rows.reduce((a, r) => a + r.files.length, 0), q = QUALITY[st.quality];
   const bar = $('#pbar', s.el), txt = $('#ptxt', s.el);
   bar.classList.remove('hidden'); txt.classList.remove('hidden'); $('#goImp', s.el).disabled = true; $('#irows', s.el).style.pointerEvents = 'none'; $('#cancelImp', s.el).textContent = 'หยุด';
@@ -672,6 +684,7 @@ async function saveCurrentSet() {
   await DB.putSet(rec); if (old) Object.assign(old, rec); else S.sets.push(rec); S.setName = name; saveState(); renderTop(); toast(`บันทึกชุด “${name}” แล้ว (${rec.songs.length} เพลง)`);
 }
 function loadSet(x) {
+  logEv('เปิดชุด ' + x.name);
   const prev = { q: [...S.queue], c: S.cur, p: S.page, n: S.setName }; S.queue = x.songs.filter(i => S.songs.has(i)); S.cur = 0; S.page = 0; S.setName = x.name; resetZoom(); saveState(); renderAll();
   toast(`เปิดชุด “${x.name}” (${S.queue.length} เพลง)`, { label: 'เลิกทำ', fn: () => { S.queue = prev.q; S.cur = prev.c; S.page = prev.p; S.setName = prev.n; saveState(); renderAll(); } });
 }
@@ -836,7 +849,8 @@ async function openInfo() {
   let est = ''; try { const e = await navigator.storage.estimate(); est = `ใช้พื้นที่ ${(e.usage / 1048576).toFixed(0)} MB จาก ${(e.quota / 1048576).toFixed(0)} MB`; } catch { est = 'ตรวจพื้นที่ไม่ได้'; }
   let pers = false; try { pers = await navigator.storage.persisted(); } catch { /* unsupported */ }
   const pages = [...S.songs.values()].reduce((a, x) => a + x.n, 0);
-  const s = sheet(`<h3>ข้อมูลและพื้นที่</h3><div class="help">เพลง ${S.songs.size} เพลง · ${pages} หน้า · ชุดเล่น ${S.sets.length} ชุด<br>${est}<br>ระบบ${pers ? '' : 'ยังไม่'}รับปากว่าจะไม่ล้างข้อมูลเอง${pers ? '' : ' (แนะนำสำรองไฟล์ไว้ และเปิดแอปจากไอคอนหน้าจอหลัก)'}<br><small>เวอร์ชัน ${BUILD}</small></div><div class="row2"><button class="btn bad" data-w="1">ลบทุกอย่างในแอปนี้</button></div>`);
+  const s = sheet(`<h3>ข้อมูลและพื้นที่</h3><div class="help">เพลง ${S.songs.size} เพลง · ${pages} หน้า · ชุดเล่น ${S.sets.length} ชุด<br>${est}<br>ระบบ${pers ? '' : 'ยังไม่'}รับปากว่าจะไม่ล้างข้อมูลเอง${pers ? '' : ' (แนะนำสำรองไฟล์ไว้ และเปิดแอปจากไอคอนหน้าจอหลัก)'}<br><small>เวอร์ชัน ${BUILD}</small></div><h4 style="margin:12px 0 6px">บันทึกการทำงานล่าสุด</h4><p class="sub">ครั้งก่อนปิดแอป: ${LOG.prevClean ? 'ปกติ' : '<b style="color:var(--warn)">ไม่ปกติ (ค้างหรือถูกระบบปิด)</b>'}</p><pre class="rtlog" id="logbox" style="max-height:200px;overflow:auto;font-size:.72rem;white-space:pre-wrap">${esc([...LOG.prev.slice(-12), '--- เปิดแอปครั้งนี้ ---', ...LOG.a.slice(-12)].join('\n'))}</pre><div class="row2"><button class="btn o sm" id="logcopy">คัดลอกบันทึก</button></div><div class="row2"><button class="btn bad" data-w="1">ลบทุกอย่างในแอปนี้</button></div>`);
+  $('#logcopy', s.el).onclick = async () => { const t = $('#logbox', s.el).textContent; try { await navigator.clipboard.writeText(t); toast('คัดลอกแล้ว'); } catch { toast('คัดลอกไม่ได้ ถ่ายภาพหน้าจอแทนได้'); } };
   s.el.addEventListener('click', async e => { if (!e.target.closest('[data-w]')) return;
     if (!(await confirmDel('ลบเพลงทั้งหมด?', 'รูปโน้ต ชุดเล่น และคิวในเครื่องนี้จะหายหมด (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)', 'ลบทั้งหมด'))) return;
     if (!(await confirmDel('ยืนยันอีกครั้ง', `ลบ ${S.songs.size} เพลงออกจากเครื่องนี้ กู้คืนไม่ได้ถ้าไม่มีไฟล์สำรอง`, 'ใช่ ลบเลย'))) return;
@@ -1117,10 +1131,11 @@ async function saveEditName() {
   renderAll(); toast('เปลี่ยนชื่อเป็น “' + n + '” แล้ว');
 }
 function enterEdit() {
+  logEv('เข้าโหมดแก้ไข');
   if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
   $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; dotPaint(); etbPaint(); annRender(); toast('โหมดแก้ไข: นิ้วเดียว = วาด · สองนิ้ว = ซูม');
 }
-async function exitEdit() { closeMeta(); if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
+async function exitEdit() { logEv('ออกโหมดแก้ไข'); closeMeta(); if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
 function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); toast(ANN.show ? 'แสดงรอยที่วาด: เปิด' : 'แสดงรอยที่วาด: ปิด (ยังบันทึกไว้)'); }
 
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
