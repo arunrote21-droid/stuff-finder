@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-b';
+const BUILD = 'sheet-2026-11-18-e';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -630,10 +630,10 @@ const WISH = { list: [] };
 const wishNorm = t => stripHints(t).toLowerCase();
 async function wishLoad() { try { const v = await TH.get('wish:list'); if (Array.isArray(v)) WISH.list = v; } catch { /* none yet */ } }
 function wishSave() { TH.put('wish:list', WISH.list).catch(() => {}); }
-function wishAdd(q) {
+function wishAdd(q, quiet) {
   const clean = stripHints(q) || q.trim(), k = wishNorm(clean), now = Date.now(), old = WISH.list.find(x => wishNorm(x.q) === k);
   if (old) { old.t = now; old.n = (old.n || 1) + 1; } else WISH.list.unshift({ q: clean, t: now, n: 1 });
-  wishSave(); toast('จดไว้ในรายการ “เพลงที่ยังไม่มีโน้ต” แล้ว');
+  wishSave(); if (!quiet) toast('จดไว้ในรายการ “เพลงที่ยังไม่มีโน้ต” แล้ว');
 }
 const wishInLibrary = q => { const k = wishNorm(q); return k && [...S.songs.values()].some(s => { const n = wishNorm(s.name); return n.includes(k) || k.includes(n); }); };
 function openWish() {
@@ -694,8 +694,99 @@ function setBarOutside(e) { if (!e.target.closest('#setbar,#qsetBtn,.scrim')) cl
 function setBarHtml() {
   const act = activeSet();
   const cards = S.sets.map(x => `<button class="sc ${x.name === S.setName ? 'on' : ''}" data-sid="${x.id}"><b>${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small><span class="sx" data-del="${x.id}" aria-label="ลบชุด">✕</span></button>`).join('');
-  return '<div class="sbh">ชุดเล่น · แตะเพื่อเปิด · กดค้างเพื่อเปลี่ยนชื่อ · ✕ ลบชุด</div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button>'
-    + (!act && S.queue.length ? '<button class="sn o" data-savecur="1"><b>⤓ บันทึกคิวนี้</b><small>เป็นชุดใหม่</small></button>' : '') + cards + '</div>';
+  return '<div class="sbh">ชุดเล่น · แตะเพื่อเปิด · กดค้างเพื่อเปลี่ยนชื่อ · ✕ ลบชุด <button class="sbm" data-marks="1">แนบรอยที่เขียน: ' + (shareMarksOn() ? 'เปิด' : 'ปิด') + '</button></div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button><button class="sn o" data-list="1"><b>✎ พิมพ์รายการ</b><small>วางชื่อเพลงทีละบรรทัด</small></button>'
+    + (S.queue.length ? '<button class="sn o" data-sharesong="1"><b>⇪ ส่งโน้ตเพลงนี้</b><small>รูปทุกหน้า · AirDrop / LINE</small></button><button class="sn o" data-shareset="1"><b>⇪ ส่งโน้ตทั้งชุด</b><small>รูปของทุกเพลง</small></button><button class="sn o" data-sharetext="1"><b>⇪ ส่งรายชื่อ</b><small>เป็นข้อความ</small></button>' : '') + (!act && S.queue.length ? '<button class="sn o" data-savecur="1"><b>⤓ บันทึกคิวนี้</b><small>เป็นชุดใหม่</small></button>' : '') + cards + '</div>';
+}
+
+/* type or paste a list of song names (one per line) and get a set; also share a set as plain text */
+const LINE_NUM = /^\s*(?:\d{1,3}\s*[.)\-:：]|[-•*·●▪]+)\s*/, LINE_KEY = /\s*[·|]\s*[A-Ga-g][#♯b♭]?m?\s*$/;
+function parseList(text) {
+  let title = ''; const lines = [];
+  for (const raw of String(text || '').split(/\r?\n/)) {
+    let t = nfc(raw).trim(); if (!t) continue;
+    const m = /^(?:ชุดเล่น|ชุด|set)\s*[:：]\s*(.+)$/i.exec(t); if (m && !lines.length && !title) { title = m[1].trim(); continue; }
+    t = t.replace(LINE_NUM, '').replace(LINE_KEY, '').trim(); if (t) lines.push(t);
+  }
+  return { title, lines };
+}
+function matchLine(line, idx) { // best library matches for one typed line, most likely first
+  const q = wishNorm(line); if (!q) return [];
+  const out = [];
+  for (const it of idx) { const n = it.n; let r = -1; if (n === q) r = 0; else if (n.startsWith(q)) r = 1; else if (n.includes(q)) r = 2; else if (q.includes(n) && n.length >= 3) r = 3; if (r >= 0) out.push([r, n.length, it.s]); }
+  out.sort((a, b) => a[0] - b[0] || a[1] - b[1]); return out.slice(0, 8).map(x => x[2]);
+}
+function openListPaste(initial) {
+  const s = sheet(`<h3>พิมพ์รายการเพลง</h3><p class="sub">บรรทัดละเพลง พิมพ์เองหรือวางที่คัดลอกมา (ตัดเลขลำดับให้เอง)</p>
+    <textarea class="field" id="lt" rows="6" placeholder="แค่มี&#10;รักนานๆ&#10;หากันจนเจอ" style="width:100%;resize:vertical"></textarea>
+    <div class="row2"><button class="btn o sm" id="ltpaste">วางจากที่คัดลอก</button></div>
+    <div id="lres" class="lres"></div>
+    <label class="lw"><input type="checkbox" id="ltwish" checked> จดเพลงที่หาไม่เจอไว้ใน “เพลงที่ยังไม่มีโน้ต”</label>
+    <div class="row2"><button class="btn" id="ltgo" disabled>สร้างชุด</button></div>`);
+  const idx = [...S.songs.values()].map(x => ({ s: x, n: wishNorm(x.name) })); let rows = [], title = '', tm = 0;
+  const paint = () => {
+    const ok = rows.filter(r => r.c.length).length;
+    $('#lres', s.el).innerHTML = rows.map((r, i) => r.c.length
+      ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.c[r.i].name)}</b><small>${esc(r.line)}${r.c.length > 1 ? ` · ตัวเลือก ${r.i + 1}/${r.c.length}` : ''}</small></div>${r.c.length > 1 ? `<button class="lsw" data-sw="${i}">เปลี่ยน</button>` : ''}</div>`
+      : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>ไม่เจอในเครื่องนี้</small></div></div>`).join('');
+    const go = $('#ltgo', s.el); go.disabled = !ok; go.textContent = ok ? `สร้างชุด (${ok} เพลง${rows.length > ok ? ` · ไม่เจอ ${rows.length - ok}` : ''})` : 'สร้างชุด';
+  };
+  const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.lines.map(line => { const c = matchLine(line, idx); return { line, c, i: 0 }; }); paint(); };
+  $('#lt', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(parse, 200); });
+  $('#ltpaste', s.el).onclick = async () => { try { $('#lt', s.el).value = await navigator.clipboard.readText(); parse(); } catch { toast('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก “วาง”'); } };
+  $('#lres', s.el).addEventListener('click', e => { const b = e.target.closest('[data-sw]'); if (!b) return; const r = rows[+b.dataset.sw]; r.i = (r.i + 1) % r.c.length; paint(); });
+  $('#ltgo', s.el).onclick = async () => {
+    const ids = rows.filter(r => r.c.length).map(r => r.c[r.i].id); if (!ids.length) return;
+    if ($('#ltwish', s.el).checked) rows.filter(r => !r.c.length).forEach(r => wishAdd(r.line, true));
+    let name = title || nextSetName(); if (S.sets.some(z => z.name === name)) { let k = 2; while (S.sets.some(z => z.name === name + ' (' + k + ')')) k++; name += ' (' + k + ')'; }
+    const rec = { id: uid(), name, songs: ids }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
+  };
+  if (initial) { $('#lt', s.el).value = initial; parse(); }
+}
+function setShareText() {
+  const act = activeSet(), ids = act ? act.songs : S.queue; if (!ids.length) return '';
+  return `ชุด: ${act ? act.name : 'คิวเล่น'}\n` + ids.map(i => S.songs.get(i)).filter(Boolean).map((x, k) => `${k + 1}. ${x.name}${x.key ? ' · ' + x.key : ''}`).join('\n');
+}
+function setItems() { const act = activeSet(), ids = act ? act.songs : S.queue; return { title: act ? act.name : 'คิวเล่น', songs: ids.map(i => S.songs.get(i)).filter(Boolean) }; }
+const shareMarksOn = () => { try { return localStorage.getItem('sheet:sharemarks') !== '0'; } catch { return true; } };
+const safeFile = n => nfc(n).replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 60) || 'โน้ต';
+async function pageFile(song, i, marks) { // one page as a picture to send; with the drawings and manual crop drawn in when asked
+  const blob = await DB.page(song.id, i); if (!blob) return null; const name = `${safeFile(song.name)}-${i + 1}.jpg`;
+  const strokes = marks ? await annLoad(song.id, i) : [], crop = marks ? await cropGet(song.id, i) : null;
+  if (!strokes.length && !crop) return new File([blob], name, { type: blob.type || 'image/jpeg' });
+  const bmp = await createImageBitmap(blob, { imageOrientation: 'from-image' }), W = bmp.width, H = bmp.height;
+  const gc = document.createElement('canvas'); gc.width = 48; gc.height = 64; const gg = gc.getContext('2d', { willReadFrequently: true }); gg.drawImage(bmp, 0, 0, 48, 64);
+  const d = gg.getImageData(0, 0, 48, 64).data, a = new Uint8Array(48 * 64); for (let q = 0; q < 48 * 64; q++) a[q] = (d[q * 4] * 299 + d[q * 4 + 1] * 587 + d[q * 4 + 2] * 114) / 1000; const grid = { W: 48, H: 64, a };
+  const sx = crop ? Math.round(crop.x0 * W) : 0, sy = crop ? Math.round(crop.y0 * H) : 0, cw = crop ? Math.round((crop.x1 - crop.x0) * W) : W, ch = crop ? Math.round((crop.y1 - crop.y0) * H) : H;
+  const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); g.drawImage(bmp, sx, sy, cw, ch, 0, 0, cw, ch); bmp.close?.();
+  const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
+  g.lineCap = 'round'; g.lineJoin = 'round';
+  for (const k of strokes) {
+    const dk = strokeDark(k, grid), pts = k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, lw = k.w * W, col = dk ? (LIGHT[k.c] || k.c) : k.c, o = k.o != null ? k.o : (k.t === 'h' ? (dk ? 0.8 : 0.45) : 1);
+    const trace = () => { g.beginPath(); for (let q = 0; q < pts.length; q += 2) { const x = pts[q] * W - sx, y = pts[q + 1] * H - sy; q ? g.lineTo(x, y) : g.moveTo(x, y); } };
+    if (k.t !== 'h' && dk && o > 0.5) { trace(); g.globalAlpha = 0.85 * o; g.strokeStyle = '#fff'; g.lineWidth = lw + 3; g.globalCompositeOperation = 'source-over'; g.stroke(); }
+    trace(); g.globalAlpha = o; g.strokeStyle = col; g.lineWidth = lw; g.globalCompositeOperation = k.t === 'h' && !dk ? 'multiply' : 'source-over'; g.stroke();
+  }
+  g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
+  const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)); c.width = c.height = 0; gc.width = gc.height = 0; return out ? new File([out], name, { type: 'image/jpeg' }) : null;
+}
+async function shareScores(wholeSet) { // prepare the pictures, then one button gives the share sheet a fresh tap (iOS needs that)
+  const songs = wholeSet ? setItems().songs : [curSong()].filter(Boolean); if (!songs.length) { toast('ยังไม่มีเพลงให้ส่ง'); return; }
+  const marks = shareMarksOn(), total = songs.reduce((a, x) => a + x.n, 0), files = []; let n = 0;
+  try { for (const x of songs) for (let i = 0; i < x.n; i++) { const f = await pageFile(x, i, marks); if (f) files.push(f); n++; if (total > 3 && n % 2 === 0) toast(`กำลังเตรียมรูป ${n}/${total}…`); } } catch (err) { toast('เตรียมรูปไม่สำเร็จ: ' + (err.message || err)); return; }
+  if (!files.length) { toast('ไม่พบรูปโน้ต'); return; }
+  const PER = 10, batches = []; for (let i = 0; i < files.length; i += PER) batches.push(files.slice(i, i + PER));
+  const s = sheet(`<h3>พร้อมส่งแล้ว</h3><p class="sub">${files.length} รูป · ${songs.length} เพลง · ${marks ? 'รวมรอยที่เขียนไว้' : 'ต้นฉบับสะอาด'}</p><div class="shb">${batches.map((b, i) => `<button class="btn ${i ? 'o' : ''}" data-b="${i}">${batches.length > 1 ? `ส่งรูปที่ ${i * PER + 1}–${i * PER + b.length}` : 'ส่งรูป'}</button>`).join('')}</div>${batches.length > 1 ? '<p class="sub">ส่งทีละกลุ่มเพื่อไม่ให้เครื่องค้าง กดกลุ่มถัดไปหลังส่งเสร็จ</p>' : ''}<div class="row2"><button class="btn o" data-x="1">ปิด</button></div>`);
+  s.el.addEventListener('click', async e => {
+    if (e.target.closest('[data-x]')) { s.close(); return; }
+    const b = e.target.closest('[data-b]'); if (!b) return; const batch = batches[+b.dataset.b];
+    try { if (navigator.canShare && navigator.canShare({ files: batch })) { await navigator.share({ files: batch }); logEv(`ส่งรูปโน้ต ${batch.length} รูป`); b.classList.add('o'); b.textContent = '✓ ' + b.textContent; } else toast('เครื่องนี้ส่งรูปจากแอปไม่ได้'); }
+    catch (err) { if (!err || err.name !== 'AbortError') toast('ส่งไม่สำเร็จ ลองอีกครั้ง'); }
+  });
+}
+async function shareSet() { // the set as plain text, for people who use the app too (paste it into “พิมพ์รายการ”)
+  const text = setShareText(); if (!text) { toast('ยังไม่มีเพลงในคิวหรือชุดนี้'); return; }
+  try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(text); toast('คัดลอกรายการแล้ว ส่งต่อได้เลย'); } catch { toast('ส่งไม่ได้ ลองใหม่อีกครั้ง'); }
 }
 function nextSetName() { let n = 1; while (S.sets.some(x => x.name === 'ชุดใหม่ ' + n)) n++; return 'ชุดใหม่ ' + n; }
 async function newSet(fromQueue) {
@@ -722,6 +813,11 @@ function toggleSetBar() {
     if (fired) { fired = false; return; }
     if (e.target.closest('[data-new]')) { closeSetBar(); newSet(false); return; }
     if (e.target.closest('[data-savecur]')) { closeSetBar(); newSet(true); return; }
+    if (e.target.closest('[data-list]')) { closeSetBar(); openListPaste(); return; }
+    if (e.target.closest('[data-sharesong]')) { closeSetBar(); shareScores(false); return; }
+    if (e.target.closest('[data-shareset]')) { closeSetBar(); shareScores(true); return; }
+    if (e.target.closest('[data-sharetext]')) { closeSetBar(); shareSet(); return; }
+    if (e.target.closest('[data-marks]')) { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } e.target.closest('[data-marks]').textContent = 'แนบรอยที่เขียน: ' + (on ? 'เปิด' : 'ปิด'); return; }
     const d = e.target.closest('[data-del]');
     if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (!x) return;
       if (await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); if ($('#setbar')) bar.innerHTML = setBarHtml(); toast(`ลบชุด “${x.name}” แล้ว`); }
@@ -927,8 +1023,8 @@ function measureDark() { // a small brightness grid of the page, so ink can be m
   ANN.grid = null; try { const im = $('#pg'); if (!im.naturalWidth) return; const W = 48, H = 64, c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0, W, H);
     const d = g.getImageData(0, 0, W, H).data, a = new Uint8Array(W * H); for (let i = 0; i < W * H; i++) a[i] = (d[i * 4] * 299 + d[i * 4 + 1] * 587 + d[i * 4 + 2] * 114) / 1000; ANN.grid = { W, H, a }; } catch { ANN.grid = null; }
 }
-function strokeDark(k) {
-  const G = ANN.grid; if (!G) return false; let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+function strokeDark(k, G = ANN.grid) {
+  if (!G) return false; let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
   for (let i = 0; i < k.pts.length; i += 2) { x0 = Math.min(x0, k.pts[i]); x1 = Math.max(x1, k.pts[i]); y0 = Math.min(y0, k.pts[i + 1]); y1 = Math.max(y1, k.pts[i + 1]); }
   const pad = (k.w || 0.01) * 1.5, ax = Math.max(0, Math.floor((x0 - pad) * G.W)), bx = Math.min(G.W - 1, Math.ceil((x1 + pad) * G.W)), ay = Math.max(0, Math.floor((y0 - pad) * G.H)), by = Math.min(G.H - 1, Math.ceil((y1 + pad) * G.H));
   let sum = 0, n = 0; for (let y = ay; y <= by; y++) for (let x = ax; x <= bx; x++) { sum += G.a[y * G.W + x]; n++; } return n > 0 && sum / n < 110;

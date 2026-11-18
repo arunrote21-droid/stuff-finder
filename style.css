@@ -332,3 +332,16 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #kbp .kq{flex-wrap:wrap;gap:6px}
 #kbp .kq{flex-wrap:nowrap;gap:4px}
 #kbp .kq button{flex:1;min-width:0;height:36px;padding:0;font-size:.95rem}
+
+/* list paste */
+.lres{margin:10px 0;max-height:36vh;overflow:auto}
+.lr{display:flex;align-items:center;gap:10px;padding:8px 6px;border-bottom:1px solid var(--line)}
+.lr .ln{flex:none;width:24px;height:24px;border-radius:50%;background:var(--s2);display:grid;place-items:center;font-size:.72rem;font-weight:700}
+.lr .lm{flex:1;min-width:0}.lr .lm b{display:block;font-size:.92rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lr .lm small{display:block;font-size:.72rem;color:var(--mut,#9bb);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lr .lsw{flex:none;height:32px;padding:0 12px;border-radius:10px;background:var(--s2);color:var(--ink);font-size:.78rem;font-weight:700}
+.lr.bad .lm b{color:var(--bad,#ef4444)}
+.lw{display:flex;align-items:center;gap:8px;font-size:.82rem;margin:6px 0}
+
+#setbar .sbm{margin-left:10px;height:26px;padding:0 10px;border-radius:999px;background:var(--s2);color:var(--ink);font-size:.72rem;font-weight:700}
+.shb{display:flex;flex-direction:column;gap:8px;margin:10px 0}
