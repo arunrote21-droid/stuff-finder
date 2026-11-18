@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-f';
+const BUILD = 'sheet-2026-11-18-g';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -714,6 +714,21 @@ function matchLine(line, idx) { // best library matches for one typed line, most
   for (const it of idx) { const n = it.n; let r = -1; if (n === q) r = 0; else if (n.startsWith(q)) r = 1; else if (n.includes(q)) r = 2; else if (q.includes(n) && n.length >= 3) r = 3; if (r >= 0) out.push([r, n.length, it.s]); }
   out.sort((a, b) => a[0] - b[0] || a[1] - b[1]); return out.slice(0, 8).map(x => x[2]);
 }
+function pickSong(line, idx, current) { // search the whole library and choose the right song for one line
+  return new Promise(res => {
+    const s = sheet(`<h3>เลือกเพลง</h3><p class="sub">สำหรับ “${esc(line)}”</p><input class="field" id="pq" autocomplete="off" placeholder="ค้นหาชื่อเพลง…" value="${esc(stripHints(line))}"><div id="pres" class="lres" style="max-height:48vh"></div><div class="row2"><button class="btn o" data-r="skip">ข้ามเพลงนี้</button><button class="btn o" data-r="cancel">ยกเลิก</button></div>`, { onclose: () => res(undefined) });
+    const paint = () => {
+      const terms = wishNorm($('#pq', s.el).value).split(/\s+/).filter(Boolean);
+      const list = idx.filter(it => terms.every(t => it.n.includes(t))).sort((x, y) => (+!x.n.startsWith(terms[0] || '')) - (+!y.n.startsWith(terms[0] || '')) || x.n.length - y.n.length).slice(0, 40);
+      $('#pres', s.el).innerHTML = list.length ? list.map(it => `<div class="lr pk" data-id="${it.s.id}"><div class="lm"><b>${hl(it.s.name, terms)}</b><small>${it.s.n} หน้า${current && current.id === it.s.id ? ' · เลือกอยู่' : ''}</small></div></div>`).join('') : '<p class="sub">ไม่พบเพลงที่ตรงกัน ลองพิมพ์คำสั้น ๆ</p>';
+    };
+    let tm = 0; $('#pq', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(paint, 150); }); paint();
+    s.el.addEventListener('click', e => {
+      const r = e.target.closest('[data-r]'); if (r) { const v = r.dataset.r === 'skip' ? null : undefined; res(v); s.close(); return; }
+      const p = e.target.closest('.pk'); if (p) { const song = S.songs.get(p.dataset.id); res(song); s.close(); }
+    });
+  });
+}
 function openListPaste(initial) {
   const s = sheet(`<h3>พิมพ์รายการเพลง</h3><p class="sub">บรรทัดละเพลง พิมพ์เองหรือวางที่คัดลอกมา (ตัดเลขลำดับให้เอง)</p>
     <textarea class="field" id="lt" rows="6" placeholder="แค่มี&#10;รักนานๆ&#10;หากันจนเจอ" style="width:100%;resize:vertical"></textarea>
@@ -722,20 +737,22 @@ function openListPaste(initial) {
     <label class="lw"><input type="checkbox" id="ltwish" checked> จดเพลงที่หาไม่เจอไว้ใน “เพลงที่ยังไม่มีโน้ต”</label>
     <div class="row2"><button class="btn" id="ltgo" disabled>สร้างชุด</button></div>`);
   const idx = [...S.songs.values()].map(x => ({ s: x, n: wishNorm(x.name) })); let rows = [], title = '', tm = 0;
+  const fin = r => (r.skip ? null : r.sel || r.c[0] || null);
   const paint = () => {
-    const ok = rows.filter(r => r.c.length).length;
-    $('#lres', s.el).innerHTML = rows.map((r, i) => r.c.length
-      ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.c[r.i].name)}</b><small>${esc(r.line)}${r.c.length > 1 ? ` · ตัวเลือก ${r.i + 1}/${r.c.length}` : ''}</small></div>${r.c.length > 1 ? `<button class="lsw" data-sw="${i}">เปลี่ยน</button>` : ''}</div>`
-      : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>ไม่เจอในเครื่องนี้</small></div></div>`).join('');
-    const go = $('#ltgo', s.el); go.disabled = !ok; go.textContent = ok ? `สร้างชุด (${ok} เพลง${rows.length > ok ? ` · ไม่เจอ ${rows.length - ok}` : ''})` : 'สร้างชุด';
+    const ok = rows.filter(r => fin(r)).length;
+    $('#lres', s.el).innerHTML = rows.map((r, i) => { const f = fin(r);
+      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button></div>`
+        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button></div>`; }).join('');
+    const go = $('#ltgo', s.el); go.disabled = !ok; go.textContent = ok ? `สร้างชุด (${ok} เพลง${rows.length > ok ? ` · ไม่ใส่ ${rows.length - ok}` : ''})` : 'สร้างชุด';
   };
-  const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.lines.map(line => { const c = matchLine(line, idx); return { line, c, i: 0 }; }); paint(); };
+  const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.lines.map(line => ({ line, c: matchLine(line, idx), sel: null, skip: false })); paint(); };
   $('#lt', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(parse, 200); });
   $('#ltpaste', s.el).onclick = async () => { try { $('#lt', s.el).value = await navigator.clipboard.readText(); parse(); } catch { toast('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก “วาง”'); } };
-  $('#lres', s.el).addEventListener('click', e => { const b = e.target.closest('[data-sw]'); if (!b) return; const r = rows[+b.dataset.sw]; r.i = (r.i + 1) % r.c.length; paint(); });
+  $('#lres', s.el).addEventListener('click', async e => { const b = e.target.closest('[data-sw]'); if (!b) return; const r = rows[+b.dataset.sw];
+    const v = await pickSong(r.line, idx, fin(r)); if (v === undefined) return; if (v === null) { r.skip = true; r.sel = null; } else { r.skip = false; r.sel = v; } paint(); });
   $('#ltgo', s.el).onclick = async () => {
-    const ids = rows.filter(r => r.c.length).map(r => r.c[r.i].id); if (!ids.length) return;
-    if ($('#ltwish', s.el).checked) rows.filter(r => !r.c.length).forEach(r => wishAdd(r.line, true));
+    const ids = rows.map(fin).filter(Boolean).map(x => x.id); if (!ids.length) return;
+    if ($('#ltwish', s.el).checked) rows.filter(r => !fin(r) && !r.skip).forEach(r => wishAdd(r.line, true));
     let name = title || nextSetName(); if (S.sets.some(z => z.name === name)) { let k = 2; while (S.sets.some(z => z.name === name + ' (' + k + ')')) k++; name += ' (' + k + ')'; }
     const rec = { id: uid(), name, songs: ids }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
   };

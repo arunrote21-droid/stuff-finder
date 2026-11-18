@@ -349,3 +349,5 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #setbar .sbh{display:flex;align-items:center;justify-content:space-between;gap:10px}
 #setbar .sbh span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
 #setbar .sbm{margin-left:0;flex:none}
+
+.lr.pk{cursor:pointer}.lr.pk:active{background:var(--s2)}
