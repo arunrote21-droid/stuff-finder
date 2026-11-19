@@ -362,3 +362,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 .qc.secstart{margin-left:12px}
 .qc.secstart::before{content:"ช่วง " attr(data-sec);font-size:.6rem;font-weight:700;color:var(--ac);background:var(--acs);border-radius:6px;padding:1px 5px;margin-right:2px}
+
+/* tempo dot: crisp solid circle, no glow or halo around it (the soft edge made the beat hard to read) */
+#bpmdot i::after{display:none;box-shadow:none}
+#bpmdot i{box-shadow:none;border:0}
