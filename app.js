@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-19-c';
+const BUILD = 'sheet-2026-11-19-d';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -740,12 +740,12 @@ const aliasKey = t => wishNorm(t);
 const isBreakLine = t => /^[\s\-–—−_=*~·•.]{3,}$/.test(t) && /[-–—−_=*~]/.test(t);
 function parseList(text) {
   const ent = []; let blk = 0, prevBlank = false, sec = 1;
-  for (const r0 of String(text || '').split(/\r?\n/)) {
+  for (const [ln, r0] of String(text || '').split(/\r?\n/).entries()) {
     const t = nfc(r0).trim();
     if (!t) { if (ent.length) prevBlank = true; continue; }
     if (isBreakLine(t)) { if (ent.length > 1) sec++; continue; } // --- between parts of the show
     if (prevBlank) { blk++; prevBlank = false; }
-    ent.push({ t, blk, sec });
+    ent.push({ t, blk, sec, ln });
   }
   const raws = ent.map(e => e.t);
   const isSection = t => /^\s*(?:\d{1,3}\s*[.)\-:：]?\s*)?[(（\[【].*[)）\]】]\s*$/.test(t);
@@ -767,7 +767,7 @@ function parseList(text) {
     }
     const wm = /^([A-Za-z])(?=\s|[฀-๿])\s*/.exec(t); if (wm && t.length > wm[0].length) { who = wm[1].toUpperCase(); t = t.slice(wm[0].length).trim(); }
     if (!t || (t.length < 2 && !/[฀-๿0-9]/.test(t))) continue; // a lone "T" or "K" is just a placeholder
-    items.push({ line: t, full, key, who, note, shift, blk: e.blk, sec: e.sec });
+    items.push({ line: t, full, key, who, note, shift, blk: e.blk, sec: e.sec, ln: e.ln });
   }
   return { title, items, secs: ent.length ? Math.max(...ent.map(e => e.sec)) : 1 };
 }
@@ -812,21 +812,26 @@ function openListPaste(initial) {
   const paint = () => {
     const ok = rows.filter(r => fin(r)).length;
     $('#lres', s.el).innerHTML = rows.map((r, i) => { const f = fin(r);
-      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}${rowTags(r)}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button></div>`
-        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.header ? 'ข้อมูลงาน (ข้ามให้)' : r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}${rowTags(r)}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button></div>`; }).join('');
+      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}${rowTags(r)}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button><button class="lx" data-rmrow="${i}" aria-label="ลบบรรทัดนี้">✕</button></div>`
+        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.header ? 'ข้อมูลงาน (ข้ามให้)' : r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}${rowTags(r)}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button><button class="lx" data-rmrow="${i}" aria-label="ลบบรรทัดนี้">✕</button></div>`; }).join('');
     const go = $('#ltgo', s.el); go.disabled = !ok; go.textContent = ok ? `สร้างชุด (${ok} เพลง${rows.length > ok ? ` · ไม่ใส่ ${rows.length - ok}` : ''})` : 'สร้างชุด';
   };
+  const INFO_RE = /\d{1,2}[.:]\d{2}\s*น|พ\.ย\.|พย\.|ม\.ค\.|ธ\.ค\.|ชม\./;
   const parse = () => {
+    const keep = new Map(); rows.forEach(r => { const a = keep.get(r.full) || keep.set(r.full, []).get(r.full); a.push({ sel: r.sel, skip: r.skip && !r.header }); }); // manual choices survive edits to the text
     const p = parseList($('#lt', s.el).value); title = p.title; secs = p.secs;
-    rows = p.items.map(it => { const c = matchLine(it, idx); const whole = c[0] && (it.key || it.who || it.note || it.shift) && compact(wishNorm(c[0].name)) === compact(wishNorm(it.full)); return { line: whole ? it.full : it.line, full: it.full, key: whole ? '' : it.key, who: whole ? '' : it.who, note: whole ? '' : it.note, shift: whole ? '' : it.shift, blk: it.blk, sec: it.sec, c, sel: null, skip: false }; });
+    rows = p.items.map(it => { const c = matchLine(it, idx); const whole = c[0] && (it.key || it.who || it.note || it.shift) && compact(wishNorm(c[0].name)) === compact(wishNorm(it.full)); return { line: whole ? it.full : it.line, full: it.full, key: whole ? '' : it.key, who: whole ? '' : it.who, note: whole ? '' : it.note, shift: whole ? '' : it.shift, blk: it.blk, sec: it.sec, ln: it.ln, c, sel: null, skip: false }; });
+    const seen = new Map(); rows.forEach(r => { const a = keep.get(r.full), n = seen.get(r.full) || 0; seen.set(r.full, n + 1); const o = a && a[n]; if (o) { if (o.sel) r.sel = o.sel; if (o.skip) r.skip = true; } });
     const b0 = rows.filter(r => r.blk === 0), rest = rows.filter(r => r.blk > 0); // job details above the first blank line are not songs
-    if (!p.title && b0.length && b0.length <= 6 && rest.length >= Math.max(3, b0.length) && b0.every(r => !r.c.length) && rest.some(r => r.c.length)) { title = b0[0].full; b0.forEach(r => { r.skip = true; r.header = true; }); }
+    if (!p.title && b0.length && b0.length <= 6 && rest.length >= Math.max(3, b0.length) && (b0.some(r => INFO_RE.test(r.full)) || (b0.every(r => !r.c.length) && rest.some(r => r.c.length)))) { title = b0[0].full; b0.forEach(r => { r.skip = true; r.header = true; }); }
     paint();
   };
   $('#lt', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(parse, 200); });
   $('#ltclear', s.el).onclick = () => { const t = $('#lt', s.el); t.value = ''; t.focus(); parse(); };
   $('#ltpaste', s.el).onclick = async () => { try { $('#lt', s.el).value = await navigator.clipboard.readText(); parse(); } catch { toast('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก “วาง”'); } };
-  $('#lres', s.el).addEventListener('click', async e => { const b = e.target.closest('[data-sw]'); if (!b) return; const r = rows[+b.dataset.sw];
+  $('#lres', s.el).addEventListener('click', async e => {
+    const x = e.target.closest('[data-rmrow]'); if (x) { const r = rows[+x.dataset.rmrow]; const t = $('#lt', s.el), ls = t.value.split(/\r?\n/); if (r && r.ln != null) { ls.splice(r.ln, 1); t.value = ls.join('\n'); parse(); } return; }
+    const b = e.target.closest('[data-sw]'); if (!b) return; const r = rows[+b.dataset.sw];
     const v = await pickSong(r.line, idx, fin(r)); if (v === undefined) return; if (v === null) { r.skip = true; r.sel = null; } else { r.skip = false; r.sel = v; } paint(); });
   $('#ltgo', s.el).onclick = async () => {
     const ids = rows.map(fin).filter(Boolean).map(x => x.id); if (!ids.length) return;

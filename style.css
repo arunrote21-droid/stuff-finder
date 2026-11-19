@@ -369,3 +369,5 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 .lrow .sw{flex:none;height:34px;padding:0 12px;border-radius:10px;background:var(--s2);color:var(--ink);font-size:.78rem;font-weight:700;margin-left:auto;margin-right:6px}
 .lr .vth{flex:none;width:46px;height:62px;object-fit:cover;border-radius:6px;background:#e9e6dc;opacity:.35}.lr .vth.on{opacity:1}
+
+.lr .lx{flex:none;width:34px;height:34px;border-radius:50%;background:var(--s2);color:var(--ink);font-size:.8rem;margin-left:6px}
