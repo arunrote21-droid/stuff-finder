@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-19-b';
+const BUILD = 'sheet-2026-11-19-c';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -667,14 +667,44 @@ function openWeb(k) {
   const go = () => { nav(schemes[i] + g, true); i++; if (i < schemes.length) setTimeout(() => { if (!document.hidden) go(); }, 900); else setTimeout(() => { if (!document.hidden) toast('เปิด Opera ไม่ได้ ลองปุ่ม Google แทน'); }, 1200); };
   go();
 }
+function pickVersion(cur) { // choose another score for the same song (or any song) with a small preview of each
+  return new Promise(res => {
+    const s = sheet(`<h3>เปลี่ยนโน้ตของเพลงนี้</h3><p class="sub">ตอนนี้: <b>${esc(cur.name)}</b> · ${cur.n} หน้า</p><div class="fx"><input class="field" id="vq" autocomplete="off" placeholder="ค้นหาชื่อเพลง…" value="${esc(stripHints(cur.name))}"><button class="fxb" id="vqx" aria-label="ลบชื่อ">✕</button></div><div id="vres" class="lres" style="max-height:52vh"></div><div class="row2"><button class="btn o" data-r="1">ยกเลิก</button></div>`, { onclose: () => res(null) });
+    const all = [...S.songs.values()].map(x => ({ s: x, n: wishNorm(x.name), c: compact(wishNorm(x.name)) })), base = compact(wishNorm(cur.name));
+    let alive = true, run = 0;
+    const paint = async () => {
+      const terms = wishNorm($('#vq', s.el).value).split(/\s+/).filter(Boolean), my = ++run;
+      let list = all.filter(it => terms.every(t => it.n.includes(t) || it.c.includes(compact(t))));
+      list.sort((a, b) => (+(b.c === base) - +(a.c === base)) || (+(a.c.startsWith(base) ? 0 : 1) - +(b.c.startsWith(base) ? 0 : 1)) || a.n.length - b.n.length); list = list.slice(0, 30);
+      const same = list.filter(it => it.c === base || it.c.startsWith(base) && base.length > 2);
+      $('#vres', s.el).innerHTML = list.length ? list.map(it => `<div class="lr pk vr" data-id="${it.s.id}"><img class="vth" alt=""><div class="lm"><b>${hl(it.s.name, terms)}</b><small>${it.s.n} หน้า${it.s.id === cur.id ? ' · ใช้อยู่ตอนนี้' : same.includes(it) ? ' · เวอร์ชันของเพลงนี้' : ''}${it.s.key ? ' · คีย์ ' + esc(it.s.key) : ''}</small></div></div>`).join('') : '<p class="sub">ไม่พบเพลงที่ตรงกัน ลองพิมพ์คำสั้น ๆ</p>';
+      for (const row of [...$('#vres', s.el).querySelectorAll('.vr')].slice(0, 16)) { if (!alive || my !== run) return; try { const u = await makeThumb(row.dataset.id); if (u && alive && my === run) { const im = row.querySelector('.vth'); im.src = u; im.classList.add('on'); } } catch { /* no preview */ } }
+    };
+    let tm = 0; $('#vq', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(paint, 180); }); $('#vqx', s.el).onclick = () => { const i = $('#vq', s.el); i.value = ''; i.focus(); paint(); }; paint();
+    s.el.addEventListener('click', e => {
+      if (e.target.closest('[data-r]')) { alive = false; s.close(); return; }
+      const p = e.target.closest('.vr'); if (p) { const song = S.songs.get(p.dataset.id); alive = false; res(song); s.close(); }
+    });
+  });
+}
+async function swapInQueue(i) { // replace one queued song with another score, same position
+  const oldId = S.queue[i], old = S.songs.get(oldId); if (!old) return;
+  const nu = await pickVersion(old); if (!nu || nu.id === oldId) return;
+  const prev = { q: [...S.queue], c: S.cur, p: S.page }, act = activeSet(), note = act && act.notes && act.notes[oldId], hadNew = act && act.notes && act.notes[nu.id];
+  if (act && note && !hadNew) { act.notes[nu.id] = note; if (S.queue.filter(x => x === oldId).length < 2) delete act.notes[oldId]; }
+  S.queue[i] = nu.id; if (i === S.cur) { S.page = 0; resetZoom(); }
+  logEv(`สลับโน้ต “${old.name.slice(0, 20)}” → “${nu.name.slice(0, 20)}”`); saveState(); renderAll();
+  toast(`เปลี่ยนเป็น “${nu.name}” (${nu.n} หน้า) แล้ว`, { label: 'เลิกทำ', fn: () => { S.queue = prev.q; S.cur = prev.c; S.page = prev.p; if (act && note && !hadNew) { act.notes[oldId] = note; delete act.notes[nu.id]; } saveState(); renderAll(); } });
+}
 function openQueueSheet() {
   const s = sheet(`<h3>คิวเล่น <small style="color:var(--mut);font-weight:400">${S.queue.length} เพลง</small></h3><p class="sub">แตะเพลงเพื่อเล่น · จับ ⠿ แล้วลากเพื่อสลับลำดับ · ✕ เอาออก</p><div id="qlist"></div><div class="row2"><button class="btn o" data-q="save">บันทึกเป็นชุดเล่น</button><button class="btn bad" data-q="clear">ล้างคิว</button></div>`);
   const list = $('#qlist', s.el);
-  const paint = () => { list.innerHTML = S.queue.map((id, i) => `<div class="lrow ${i === S.cur ? 'cur' : ''}" data-id="${id}"><span class="gr" aria-label="ลาก">⠿</span><span class="no">${i === S.cur ? '▶' : i + 1}</span><div class="nm" data-play="${i}">${esc(S.songs.get(id)?.name)}<small>${S.songs.get(id)?.n || 0} หน้า</small></div><button class="x" data-rm="${i}" aria-label="เอาออก">✕</button></div>`).join('') || '<div class="note">คิวว่าง กด ＋ เพื่อเพิ่มเพลง</div>'; };
+  const paint = () => { list.innerHTML = S.queue.map((id, i) => `<div class="lrow ${i === S.cur ? 'cur' : ''}" data-id="${id}"><span class="gr" aria-label="ลาก">⠿</span><span class="no">${i === S.cur ? '▶' : i + 1}</span><div class="nm" data-play="${i}">${esc(S.songs.get(id)?.name)}<small>${S.songs.get(id)?.n || 0} หน้า</small></div><button class="sw" data-swap="${i}">เปลี่ยน</button><button class="x" data-rm="${i}" aria-label="เอาออก">✕</button></div>`).join('') || '<div class="note">คิวว่าง กด ＋ เพื่อเพิ่มเพลง</div>'; };
   paint();
   sortable(list, { axis: 'y', itemSel: '.lrow', handleSel: '.gr', hold: 0, onDrop: ids => { setQueueOrder(ids); paint(); } });
   s.el.addEventListener('click', async e => {
     const pl = e.target.closest('[data-play]'); if (pl && !justDragged(list)) { s.close(); play(+pl.dataset.play); return; }
+    const sw = e.target.closest('[data-swap]'); if (sw) { await swapInQueue(+sw.dataset.swap); paint(); return; }
     const rm = e.target.closest('[data-rm]'); if (rm) { removeFromQueue(+rm.dataset.rm); paint(); return; }
     const b = e.target.closest('[data-q]'); if (!b) return;
     if (b.dataset.q === 'clear') { if (await confirmDel('ล้างคิวทั้งหมด?', 'โน้ตในเครื่องไม่ถูกลบ แค่เอาออกจากคิว', 'ล้างคิว')) { S.queue = []; S.cur = 0; S.page = 0; S.setName = ''; saveState(); renderAll(); s.close(); } }
