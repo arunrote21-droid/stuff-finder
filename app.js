@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-18-j';
+const BUILD = 'sheet-2026-11-19-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -260,9 +260,13 @@ function renderTop() {
   $('#tSet').textContent = S.setName ? `ชุด: ${S.setName}` : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
   if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; $('#editBtn').hidden = true; }
 }
+function secStart(id, i) { // first song of each part of the show (parts come from the --- lines of a pasted list)
+  const a = activeSet(); if (!a || !a.notes) return 0; const n = a.notes[id], p = i ? a.notes[S.queue[i - 1]] : null;
+  return n && n.sec && (!p || p.sec !== n.sec) ? n.sec : 0;
+}
 function renderStrip() {
   $('#qn').textContent = S.queue.length;
-  $('#qwrap').innerHTML = S.queue.map((id, i) => `<div class="qc ${i === S.cur ? 'cur' : ''}" data-id="${id}" data-i="${i}"><i>${i + 1}</i>${i === S.cur ? '▶' : ''}<span>${esc(S.songs.get(id)?.name)}</span></div>`).join('')
+  $('#qwrap').innerHTML = S.queue.map((id, i) => `<div class="qc ${i === S.cur ? 'cur' : ''}${secStart(id, i) ? ' secstart' : ''}" data-id="${id}" data-i="${i}"${secStart(id, i) ? ` data-sec="${secStart(id, i)}"` : ''}><i>${i + 1}</i>${i === S.cur ? '▶' : ''}<span>${esc(S.songs.get(id)?.name)}</span></div>`).join('')
     || '<div class="qc" style="opacity:.55">ยังไม่มีเพลงในคิว กด ＋</div>';
 }
 function scrollToCur() { const el = $('#qwrap .qc.cur'); el?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); }
@@ -699,36 +703,51 @@ function setBarHtml() {
 
 /* type or paste a list of song names (one per line) and get a set; also share a set as plain text */
 const LINE_NUM = /^\s*(?:\d{1,3}\s*[.)\-:：]|[-•*·●▪]+)\s*/, KEY_TAIL = /(?:^|(?<=[\s฀-๿·|]))\s*([A-G](?:#|♯|b|♭)?(?:m|min)?)\s*$/;
+const compact = t => String(t || '').replace(/[\s.\-_'’"“”,!?()（）]/g, '');
 const ALIAS = { map: {} }; // names you fixed once are remembered: typed name -> song id
 async function aliasLoad() { try { const v = await TH.get('alias:list'); if (v && typeof v === 'object') ALIAS.map = v; } catch { /* none yet */ } }
 const aliasKey = t => wishNorm(t);
+const isBreakLine = t => /^[\s\-–—−_=*~·•.]{3,}$/.test(t) && /[-–—−_=*~]/.test(t);
 function parseList(text) {
-  const raws = String(text || '').split(/\r?\n/).map(x => nfc(x).trim()).filter(Boolean);
+  const ent = []; let blk = 0, prevBlank = false, sec = 1;
+  for (const r0 of String(text || '').split(/\r?\n/)) {
+    const t = nfc(r0).trim();
+    if (!t) { if (ent.length) prevBlank = true; continue; }
+    if (isBreakLine(t)) { if (ent.length > 1) sec++; continue; } // --- between parts of the show
+    if (prevBlank) { blk++; prevBlank = false; }
+    ent.push({ t, blk, sec });
+  }
+  const raws = ent.map(e => e.t);
   const isSection = t => /^\s*(?:\d{1,3}\s*[.)\-:：]?\s*)?[(（\[【].*[)）\]】]\s*$/.test(t);
   let title = '', first = 0;
   const m0 = raws.length && /^(?:ชุดเล่น|ชุด|set)\s*[:：]\s*(.+)$/i.exec(raws[0]);
   if (m0) { title = m0[1].trim(); first = 1; }
-  else if (raws.length > 1 && !LINE_NUM.test(raws[0]) && raws.some(isSection) ) { title = raws[0]; first = 1; }
+  else if (raws.length > 1 && !LINE_NUM.test(raws[0]) && raws.some(isSection)) { title = raws[0]; first = 1; }
   else if (raws.length > 2 && !LINE_NUM.test(raws[0]) && raws.slice(1).filter(t => LINE_NUM.test(t)).length >= Math.max(2, (raws.length - 1) * 0.6)) { title = raws[0]; first = 1; }
   const items = [];
-  for (const raw of raws.slice(first)) {
-    if (isSection(raw)) continue;
+  for (const e of ent.slice(first)) {
+    const raw = e.t; if (isSection(raw)) continue;
     let t = raw.replace(LINE_NUM, '').trim(); if (!t) continue;
-    const full = t; let who = '', key = '';
-    const km = KEY_TAIL.exec(t); if (km && t.length > km[1].length + 1) { key = km[1].replace('♯', '#').replace('♭', 'b').replace(/min$/, 'm'); t = t.slice(0, km.index).trim(); }
+    const full = t; let who = '', key = '', note = '', shift = '';
+    for (let pass = 0; pass < 3; pass++) { // trailing bits can come in any mix: (note) +5 key
+      const nm = /\s*[(（]([^()（）]*)[)）]\s*$/.exec(t); if (nm && t.length > nm[0].length) { note = (nm[1].trim() + (note ? ' ' + note : '')).trim(); t = t.slice(0, nm.index).trim(); continue; }
+      const sm = /(?:^|(?<=[\s฀-๿]))\s*([+＋−-]\s*\d{1,2})\s*$/.exec(t); if (sm && t.length > sm[0].length) { shift = sm[1].replace(/\s/g, '').replace('＋', '+').replace('−', '-'); t = t.slice(0, sm.index).trim(); continue; }
+      const km = KEY_TAIL.exec(t); if (km && t.length > km[1].length + 1 && !key) { key = km[1].replace('♯', '#').replace('♭', 'b').replace(/min$/, 'm'); t = t.slice(0, km.index).trim(); continue; }
+      break;
+    }
     const wm = /^([A-Za-z])(?=\s|[฀-๿])\s*/.exec(t); if (wm && t.length > wm[0].length) { who = wm[1].toUpperCase(); t = t.slice(wm[0].length).trim(); }
     if (!t || (t.length < 2 && !/[฀-๿0-9]/.test(t))) continue; // a lone "T" or "K" is just a placeholder
-    items.push({ line: t, full, key, who });
+    items.push({ line: t, full, key, who, note, shift, blk: e.blk, sec: e.sec });
   }
-  return { title, items };
+  return { title, items, secs: ent.length ? Math.max(...ent.map(e => e.sec)) : 1 };
 }
 function matchLine(item, idx) { // best library matches for one list line, most likely first
   const tries = [item.line, item.full].filter((v, i, a) => v && a.indexOf(v) === i), seen = new Set(), out = [];
   const al = ALIAS.map[aliasKey(item.line)]; if (al && S.songs.has(al)) { out.push(S.songs.get(al)); seen.add(al); }
   const kk = (item.key || '').toLowerCase();
   for (const line of tries) {
-    const q = wishNorm(line); if (!q) continue; const part = [];
-    for (const it of idx) { if (seen.has(it.s.id)) continue; const n = it.n; let r = -1; if (n === q) r = 0; else if (n.startsWith(q)) r = 1; else if (n.includes(q)) r = 2; else if (q.includes(n) && n.length >= 3) r = 3; if (r >= 0) { const km = kk && ((it.s.key || '').toLowerCase() === kk || n.endsWith(' ' + kk)) ? 0 : 1; part.push([r, km, n.length, it.s]); } }
+    const q = compact(wishNorm(line)); if (!q) continue; const part = [];
+    for (const it of idx) { if (seen.has(it.s.id)) continue; const n = it.c; let r = -1; if (n === q) r = 0; else if (n.startsWith(q)) r = 1; else if (n.includes(q)) r = 2; else if (q.includes(n) && n.length >= 3) r = 3; if (r >= 0) { const km = kk && ((it.s.key || '').toLowerCase() === kk || it.n.endsWith(' ' + kk)) ? 0 : 1; part.push([r, km, n.length, it.s]); } }
     part.sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]);
     for (const p of part) { if (!seen.has(p[3].id)) { seen.add(p[3].id); out.push(p[3]); } }
     if (out.length) break;
@@ -757,16 +776,23 @@ function openListPaste(initial) {
     <div id="lres" class="lres"></div>
     <label class="lw"><input type="checkbox" id="ltwish" checked> จดเพลงที่หาไม่เจอไว้ใน “เพลงที่ยังไม่มีโน้ต”</label>
     <div class="row2"><button class="btn" id="ltgo" disabled>สร้างชุด</button></div>`);
-  const idx = [...S.songs.values()].map(x => ({ s: x, n: wishNorm(x.name) })); let rows = [], title = '', tm = 0;
+  const idx = [...S.songs.values()].map(x => { const n = wishNorm(x.name); return { s: x, n, c: compact(n) }; }); let rows = [], title = '', tm = 0, secs = 1;
   const fin = r => (r.skip ? null : r.sel || r.c[0] || null);
+  const rowTags = r => (r.key ? ' · คีย์ ' + esc(r.key) : '') + (r.who ? ' · ' + esc(r.who) : '') + (r.shift ? ' · ' + esc(r.shift) : '') + (r.note ? ' · ' + esc(r.note) : '') + (secs > 1 ? ' · ช่วง ' + r.sec : '');
   const paint = () => {
     const ok = rows.filter(r => fin(r)).length;
     $('#lres', s.el).innerHTML = rows.map((r, i) => { const f = fin(r);
-      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}${r.key ? ' · คีย์ ' + esc(r.key) : ''}${r.who ? ' · ' + esc(r.who) : ''}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button></div>`
-        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}${r.key ? ' · คีย์ ' + esc(r.key) : ''}${r.who ? ' · ' + esc(r.who) : ''}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button></div>`; }).join('');
+      return f ? `<div class="lr"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(f.name)}</b><small>${esc(r.line)}${r.sel ? ' · เลือกเอง' : ''}${rowTags(r)}</small></div><button class="lsw" data-sw="${i}">เปลี่ยน</button></div>`
+        : `<div class="lr bad"><span class="ln">${i + 1}</span><div class="lm"><b>${esc(r.line)}</b><small>${r.header ? 'ข้อมูลงาน (ข้ามให้)' : r.skip ? 'ข้ามเพลงนี้' : 'ไม่เจอในเครื่องนี้'}${rowTags(r)}</small></div><button class="lsw" data-sw="${i}">ค้นหา</button></div>`; }).join('');
     const go = $('#ltgo', s.el); go.disabled = !ok; go.textContent = ok ? `สร้างชุด (${ok} เพลง${rows.length > ok ? ` · ไม่ใส่ ${rows.length - ok}` : ''})` : 'สร้างชุด';
   };
-  const parse = () => { const p = parseList($('#lt', s.el).value); title = p.title; rows = p.items.map(it => { const c = matchLine(it, idx); const whole = c[0] && (it.key || it.who) && wishNorm(c[0].name) === wishNorm(it.full); return { line: whole ? it.full : it.line, key: whole ? '' : it.key, who: whole ? '' : it.who, c, sel: null, skip: false }; }); paint(); };
+  const parse = () => {
+    const p = parseList($('#lt', s.el).value); title = p.title; secs = p.secs;
+    rows = p.items.map(it => { const c = matchLine(it, idx); const whole = c[0] && (it.key || it.who || it.note || it.shift) && compact(wishNorm(c[0].name)) === compact(wishNorm(it.full)); return { line: whole ? it.full : it.line, full: it.full, key: whole ? '' : it.key, who: whole ? '' : it.who, note: whole ? '' : it.note, shift: whole ? '' : it.shift, blk: it.blk, sec: it.sec, c, sel: null, skip: false }; });
+    const b0 = rows.filter(r => r.blk === 0), rest = rows.filter(r => r.blk > 0); // job details above the first blank line are not songs
+    if (!p.title && b0.length && b0.length <= 6 && rest.length >= Math.max(3, b0.length) && b0.every(r => !r.c.length) && rest.some(r => r.c.length)) { title = b0[0].full; b0.forEach(r => { r.skip = true; r.header = true; }); }
+    paint();
+  };
   $('#lt', s.el).addEventListener('input', () => { clearTimeout(tm); tm = setTimeout(parse, 200); });
   $('#ltclear', s.el).onclick = () => { const t = $('#lt', s.el); t.value = ''; t.focus(); parse(); };
   $('#ltpaste', s.el).onclick = async () => { try { $('#lt', s.el).value = await navigator.clipboard.readText(); parse(); } catch { toast('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก “วาง”'); } };
@@ -776,15 +802,18 @@ function openListPaste(initial) {
     const ids = rows.map(fin).filter(Boolean).map(x => x.id); if (!ids.length) return;
     if ($('#ltwish', s.el).checked) rows.filter(r => !fin(r) && !r.skip).forEach(r => wishAdd(r.line, true));
     let name = title || nextSetName(); if (S.sets.some(z => z.name === name)) { let k = 2; while (S.sets.some(z => z.name === name + ' (' + k + ')')) k++; name += ' (' + k + ')'; }
-    const notes = {}; for (const r of rows) { const f = fin(r); if (f && (r.key || r.who)) notes[f.id] = { ...(r.key ? { key: r.key } : {}), ...(r.who ? { who: r.who } : {}) }; if (f && r.sel) ALIAS.map[aliasKey(r.line)] = f.id; }
+    const notes = {}; for (const r of rows) { const f = fin(r); if (f && (r.key || r.who || r.note || r.shift || secs > 1)) notes[f.id] = { ...(r.key ? { key: r.key } : {}), ...(r.who ? { who: r.who } : {}), ...(r.shift ? { shift: r.shift } : {}), ...(r.note ? { note: r.note } : {}), ...(secs > 1 ? { sec: r.sec } : {}) }; if (f && r.sel) ALIAS.map[aliasKey(r.line)] = f.id; }
     try { await TH.put('alias:list', ALIAS.map); } catch { /* optional */ }
-    const rec = { id: uid(), name, songs: ids, notes }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
+    const rec = { id: uid(), name, songs: ids, notes, secs }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
   };
   if (initial) { $('#lt', s.el).value = initial; parse(); }
 }
 function setShareText() {
   const act = activeSet(), ids = act ? act.songs : S.queue; if (!ids.length) return '';
-  return `ชุด: ${act ? act.name : 'คิวเล่น'}\n` + ids.map(i => S.songs.get(i)).filter(Boolean).map((x, k) => { const n = noteFor(x), key = (n && n.key) || x.key || ''; return `${k + 1}. ${n && n.who ? n.who + ' ' : ''}${x.name}${key ? ' · ' + key : ''}`; }).join('\n');
+  let last = 0, k = 0; const out = [];
+  for (const id of ids) { const x = S.songs.get(id); if (!x) continue; const n = noteFor(x) || {}, key = n.key || x.key || ''; if (n.sec && last && n.sec !== last) out.push('---'); if (n.sec) last = n.sec; k++;
+    out.push(`${k}. ${n.who ? n.who + ' ' : ''}${x.name}${key ? ' · ' + key : ''}${n.shift ? ' ' + n.shift : ''}${n.note ? ' (' + n.note + ')' : ''}`); }
+  return `ชุด: ${act ? act.name : 'คิวเล่น'}\n` + out.join('\n');
 }
 function setItems() { const act = activeSet(), ids = act ? act.songs : S.queue; return { title: act ? act.name : 'คิวเล่น', songs: ids.map(i => S.songs.get(i)).filter(Boolean) }; }
 const shareMarksOn = () => { try { return localStorage.getItem('sheet:sharemarks') !== '0'; } catch { return true; } };
@@ -1225,7 +1254,7 @@ function endCrop(reload) {
 /* key + tempo per song: chips in the edit bar, a small panel to set them, and a quiet blinking dot on the score */
 const TAPS = [];
 const noteFor = x => { const a = activeSet(); return (a && a.notes && a.notes[x.id]) || null; };
-const withKey = x => { const n = noteFor(x), k = (n && n.key) || x.key || ''; return x.name + (k ? ' · ' + k : '') + (n && n.key && x.key && n.key !== x.key ? ` (โน้ต ${x.key})` : '') + (n && n.who ? ' · ' + n.who : ''); };
+const withKey = x => { const n = noteFor(x) || {}, k = n.key || x.key || ''; return x.name + (k ? ' · ' + k : '') + (n.key && x.key && n.key !== x.key ? ` (โน้ต ${x.key})` : '') + (n.who ? ' · ' + n.who : '') + (n.shift ? ' · ' + n.shift : '') + (n.note ? ' · ' + n.note : '') + (n.sec ? ' · ช่วง ' + n.sec : ''); };
 function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
 function dotPaint() {
   tagPaint();
