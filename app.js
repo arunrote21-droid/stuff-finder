@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-19-d';
+const BUILD = 'sheet-2026-11-19-e';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -66,6 +66,7 @@ const DB = {
 /* ───────────── state ───────────── */
 const S = { edit: false, songs: new Map(), sets: [], queue: [], cur: 0, page: 0, zoom: 1, searching: false, q: '', letter: '', letterMode: false, shown: 120, setName: '' };
 const STATEKEY = 'sheet:state';
+const nextOrd = () => Math.max(0, ...S.sets.map(x => x.ord || 0)) + 1;
 const activeSet = () => (S.setName ? S.sets.find(x => x.name === S.setName) : null);
 function syncSet() { // the open set follows the queue: add, remove or reorder songs and the set is updated
   const x = activeSet(); if (!x || x.songs.join('|') === S.queue.join('|')) return;
@@ -371,7 +372,7 @@ function sortable(root, o) {
     if (!st || e.pointerId !== st.id) return;
     if (!st.active) { if (Math.hypot(e.clientX - st.x0, e.clientY - st.y0) > 10) { clearTimeout(st.timer); st = null; } return; }
     st.lastX = e.clientX; st.lastY = e.clientY;
-    const dx = e.clientX - st.x0, dy = e.clientY - st.y0;
+    const dx = e.clientX - st.x0, dy = e.clientY - st.y0; st.moved = Math.max(st.moved || 0, Math.hypot(dx, dy));
     if (o.axis === 'x') { st.clone.style.left = e.clientX - st.ox + 'px'; st.clone.style.top = st.r.top + Math.max(-90, Math.min(20, dy)) + 'px'; st.removing = !!o.onRemove && dy < -55; }
     else { st.clone.style.top = e.clientY - st.oy + 'px'; st.clone.style.left = st.r.left + 'px'; }
     st.clone.classList.toggle('rm', st.removing);
@@ -385,7 +386,7 @@ function sortable(root, o) {
     if (st.active) {
       clearInterval(st.scroller); st.clone.remove(); st.item.classList.remove('slot'); o.onend?.();
       root._dragged = Date.now();
-      if (st.removing) o.onRemove(st.item.dataset.id); else o.onDrop(items().map(x => x.dataset.id));
+      if (st.removing) o.onRemove(st.item.dataset.id); else o.onDrop(items().map(x => x.dataset.id), st.moved || 0);
     }
     st = null;
   };
@@ -575,7 +576,7 @@ async function runImport(s, st) {
     try {
       const data = JSON.parse(new TextDecoder().decode(await readEntry(st.setsJson.f, st.setsJson.e)));
       const byName = new Map([...S.songs.values()].map(x => [nfc(x.name).toLowerCase(), x.id]));
-      for (const set of data) { if (S.sets.some(x => x.name === set.name)) continue; const ids = (set.songs || []).map(n => byName.get(nfc(n).toLowerCase())).filter(Boolean); const rec = { id: uid(), name: set.name, songs: ids }; await DB.putSet(rec); S.sets.push(rec); }
+      for (const set of data) { if (S.sets.some(x => x.name === set.name)) continue; const ids = (set.songs || []).map(n => byName.get(nfc(n).toLowerCase())).filter(Boolean); const rec = { id: uid(), name: set.name, songs: ids, ord: nextOrd() }; await DB.putSet(rec); S.sets.push(rec); }
     } catch { /* sets are optional */ }
   }
   if (st.annJson && !st.cancel) {
@@ -714,7 +715,7 @@ function openQueueSheet() {
 async function saveCurrentSet() {
   if (!S.queue.length) return toast('คิวว่างอยู่ ยังไม่มีอะไรให้บันทึก');
   const name = await askText({ title: 'ตั้งชื่อชุดเล่น', value: S.setName || '', ok: 'บันทึก', placeholder: 'เช่น ชุดคืนวันศุกร์' }); if (!name) return;
-  const old = S.sets.find(x => x.name === name); const rec = { id: old?.id || uid(), name, songs: [...S.queue] };
+  const old = S.sets.find(x => x.name === name); const rec = { id: old?.id || uid(), name, songs: [...S.queue], ord: old?.ord ?? nextOrd() };
   await DB.putSet(rec); if (old) Object.assign(old, rec); else S.sets.push(rec); S.setName = name; saveState(); renderTop(); toast(`บันทึกชุด “${name}” แล้ว (${rec.songs.length} เพลง)`);
 }
 function loadSet(x) {
@@ -727,8 +728,8 @@ function closeSetBar() { $('#setbar')?.remove(); $('#qsetBtn')?.classList.remove
 function setBarOutside(e) { if (!e.target.closest('#setbar,#qsetBtn,.scrim')) closeSetBar(); }
 function setBarHtml() {
   const act = activeSet();
-  const cards = S.sets.map(x => `<button class="sc ${x.name === S.setName ? 'on' : ''}" data-sid="${x.id}"><b>${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small><span class="sx" data-del="${x.id}" aria-label="ลบชุด">✕</span></button>`).join('');
-  return '<div class="sbh"><span>แตะเพื่อเปิดชุด · กดค้างเพื่อเปลี่ยนชื่อ</span><button class="sbm" data-more="1">⋯ เพิ่มเติม</button></div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button>' + cards + '</div>';
+  const cards = S.sets.map(x => `<button class="sc ${x.name === S.setName ? 'on' : ''}" data-sid="${x.id}" data-id="${x.id}"><b>${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small><span class="sx sr" data-ren="${x.id}" aria-label="เปลี่ยนชื่อชุด">✎</span><span class="sx" data-del="${x.id}" aria-label="ลบชุด">✕</span></button>`).join('');
+  return '<div class="sbh"><span>แตะ = เปิดชุด · กดค้างแล้วลาก = สลับลำดับ</span><button class="sbm" data-more="1">⋯ เพิ่มเติม</button></div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button>' + cards + '</div>';
 }
 
 /* type or paste a list of song names (one per line) and get a set; also share a set as plain text */
@@ -839,7 +840,7 @@ function openListPaste(initial) {
     let name = title || nextSetName(); if (S.sets.some(z => z.name === name)) { let k = 2; while (S.sets.some(z => z.name === name + ' (' + k + ')')) k++; name += ' (' + k + ')'; }
     const notes = {}; for (const r of rows) { const f = fin(r); if (f && (r.key || r.who || r.note || r.shift || secs > 1)) notes[f.id] = { ...(r.key ? { key: r.key } : {}), ...(r.who ? { who: r.who } : {}), ...(r.shift ? { shift: r.shift } : {}), ...(r.note ? { note: r.note } : {}), ...(secs > 1 ? { sec: r.sec } : {}) }; if (f && r.sel) ALIAS.map[aliasKey(r.line)] = f.id; }
     try { await TH.put('alias:list', ALIAS.map); } catch { /* optional */ }
-    const rec = { id: uid(), name, songs: ids, notes, secs }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
+    const rec = { id: uid(), name, songs: ids, notes, secs, ord: nextOrd() }; await DB.putSet(rec); S.sets.push(rec); s.close(); loadSet(rec);
   };
   if (initial) { $('#lt', s.el).value = initial; parse(); }
 }
@@ -909,7 +910,7 @@ function openSetMore() { // the less-used things (typing a list, sending) live o
 }
 function nextSetName() { let n = 1; while (S.sets.some(x => x.name === 'ชุดใหม่ ' + n)) n++; return 'ชุดใหม่ ' + n; }
 async function newSet(fromQueue) {
-  const prev = { q: [...S.queue], c: S.cur, p: S.page, n: S.setName }, rec = { id: uid(), name: nextSetName(), songs: fromQueue ? [...S.queue] : [] };
+  const prev = { q: [...S.queue], c: S.cur, p: S.page, n: S.setName }, rec = { id: uid(), name: nextSetName(), songs: fromQueue ? [...S.queue] : [], ord: nextOrd() };
   await DB.putSet(rec); S.sets.push(rec);
   if (!fromQueue) { S.queue = []; S.cur = 0; S.page = 0; }
   S.setName = rec.name; saveState(); renderAll();
@@ -924,17 +925,23 @@ async function renameSet(x) {
 function toggleSetBar() {
   if ($('#setbar')) return closeSetBar();
   const bar = document.createElement('div'); bar.id = 'setbar'; const top = $('.top').getBoundingClientRect().bottom; bar.style.top = top + 'px'; bar.innerHTML = setBarHtml();
-  let lp = null, fired = false;
-  const clear = () => { clearTimeout(lp); lp = null; };
-  bar.addEventListener('pointerdown', e => { fired = false; const b = e.target.closest('.sc'); if (!b || e.target.closest('.sx')) return; lp = setTimeout(() => { fired = true; const x = S.sets.find(z => z.id === b.dataset.sid); if (x) { closeSetBar(); renameSet(x); } }, 650); });
-  ['pointerup', 'pointercancel', 'pointermove'].forEach(t => bar.addEventListener(t, e => { if (t !== 'pointermove' || Math.abs(e.movementX) + Math.abs(e.movementY) > 6) clear(); }));
+  const initSort = () => { const list = bar.querySelector('.sbl'); if (!list) return;
+    sortable(list, { axis: 'x', itemSel: '.sc[data-id]', hold: 450, onDrop: (ids, moved) => {
+      if (moved < 10) { const x = S.sets.find(z => z.id === lastHeld); if (x) { closeSetBar(); renameSet(x); } return; } // held and let go without moving = rename
+      const by = new Map(S.sets.map(z => [z.id, z])); const next = ids.map(i => by.get(i)).filter(Boolean); S.sets.forEach(z => { if (!next.includes(z)) next.push(z); });
+      next.forEach((z, i) => { if (z.ord !== i + 1) { z.ord = i + 1; DB.putSet(z).catch(() => {}); } }); S.sets = next; toast('จัดลำดับชุดแล้ว');
+    } });
+    list.addEventListener('pointerdown', e => { const c = e.target.closest('.sc[data-id]'); lastHeld = c ? c.dataset.id : null; }, true);
+  };
+  let lastHeld = null; initSort();
   bar.addEventListener('click', async e => {
-    if (fired) { fired = false; return; }
+    if (justDragged(bar.querySelector('.sbl'))) return;
     if (e.target.closest('[data-new]')) { closeSetBar(); newSet(false); return; }
     if (e.target.closest('[data-more]')) { closeSetBar(); openSetMore(); return; }
+    const rn = e.target.closest('[data-ren]'); if (rn) { const x = S.sets.find(z => z.id === rn.dataset.ren); if (x) { closeSetBar(); renameSet(x); } return; }
     const d = e.target.closest('[data-del]');
     if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (!x) return;
-      if (await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); if ($('#setbar')) bar.innerHTML = setBarHtml(); toast(`ลบชุด “${x.name}” แล้ว`); }
+      if (await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); if ($('#setbar')) { bar.innerHTML = setBarHtml(); initSort(); } toast(`ลบชุด “${x.name}” แล้ว`); }
       return; }
     const b = e.target.closest('[data-sid]'); if (!b) return; const x = S.sets.find(z => z.id === b.dataset.sid); closeSetBar(); if (x) loadSet(x);
   });
@@ -1484,7 +1491,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
 (async function boot() {
   try {
     await DB.open();
-    (await DB.allSongs()).forEach(s => S.songs.set(s.id, s)); S.sets = await DB.allSets();
+    (await DB.allSongs()).forEach(s => S.songs.set(s.id, s)); S.sets = (await DB.allSets()).sort((a, b) => (a.ord || 0) - (b.ord || 0));
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }

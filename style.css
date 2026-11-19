@@ -371,3 +371,9 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .lr .vth{flex:none;width:46px;height:62px;object-fit:cover;border-radius:6px;background:#e9e6dc;opacity:.35}.lr .vth.on{opacity:1}
 
 .lr .lx{flex:none;width:34px;height:34px;border-radius:50%;background:var(--s2);color:var(--ink);font-size:.8rem;margin-left:6px}
+
+#setbar .sbl .sc{padding-right:78px}
+#setbar .sbl .sx.sr{right:40px}
+.sc.slot{opacity:.35;outline:2px dashed var(--ac);background:transparent!important}
+.dragclone.sc{display:block;padding:10px 14px;border-radius:14px;min-width:140px;text-align:left}
+.dragclone.sc .sx{display:none}
