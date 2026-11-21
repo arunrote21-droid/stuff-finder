@@ -388,3 +388,13 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .tc{flex:none;height:36px;padding:0 14px;border-radius:18px;background:var(--s2);color:var(--ink);border:1px solid var(--line);font-size:.88rem;font-weight:600;white-space:nowrap}
 .tc.on{background:var(--ac);color:var(--acink);border-color:transparent}
 .tc.nw{background:transparent;border:1.5px dashed var(--ac);color:var(--ac)}
+
+/* small menu under a set chip */
+#mkpop{position:fixed;z-index:600;width:330px;max-width:calc(100vw - 16px);background:rgba(16,27,21,.98);border:1px solid var(--line);border-radius:16px;box-shadow:0 12px 30px rgba(0,0,0,.55);padding:6px}
+#mkpop button{display:flex;gap:12px;align-items:center;width:100%;padding:10px 12px;border-radius:12px;background:transparent;color:var(--ink);text-align:left}
+#mkpop button:active{background:var(--s2)}
+#mkpop .pic{width:28px;text-align:center;font-size:1.1rem;flex:none}
+#mkpop .pt{flex:1;font-weight:600;font-size:.95rem}#mkpop .pt small{display:block;font-weight:400;opacity:.65;font-size:.74rem}
+#mkpop button.bad{color:#f87171}
+.dragclone.tc{display:grid;place-items:center;height:36px;padding:0 14px;border-radius:18px;font-size:.88rem;font-weight:600}
+.tc.slot{opacity:.35;outline:2px dashed var(--ac);background:transparent!important}

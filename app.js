@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-21-b';
+const BUILD = 'sheet-2026-11-21-c';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -849,10 +849,10 @@ function openListPaste(initial) {
   };
   if (initial) { $('#lt', s.el).value = initial; parse(); }
 }
-function setShareText() {
-  const act = activeSet(), ids = act ? act.songs : S.queue; if (!ids.length) return '';
+function setShareText(rec) {
+  const act = rec || activeSet(), ids = act ? act.songs : S.queue; if (!ids.length) return '';
   let last = 0, k = 0; const out = [];
-  for (const id of ids) { const x = S.songs.get(id); if (!x) continue; const n = noteFor(x) || {}, key = n.key || x.key || ''; if (n.sec && last && n.sec !== last) out.push('---'); if (n.sec) last = n.sec; k++;
+  for (const id of ids) { const x = S.songs.get(id); if (!x) continue; const n = noteFor(x, act) || {}, key = n.key || x.key || ''; if (n.sec && last && n.sec !== last) out.push('---'); if (n.sec) last = n.sec; k++;
     out.push(`${k}. ${n.who ? n.who + ' ' : ''}${x.name}${key ? ' · ' + key : ''}${n.shift ? ' ' + n.shift : ''}${n.note ? ' (' + n.note + ')' : ''}`); }
   return `ชุด: ${act ? act.name : 'คิวเล่น'}\n` + out.join('\n');
 }
@@ -879,8 +879,8 @@ async function pageFile(song, i, marks) { // one page as a picture to send; with
   g.globalAlpha = 1; g.globalCompositeOperation = 'source-over';
   const out = await new Promise(r => c.toBlob(r, 'image/jpeg', 0.9)); c.width = c.height = 0; gc.width = gc.height = 0; return out ? new File([out], name, { type: 'image/jpeg' }) : null;
 }
-async function shareScores(wholeSet) { // prepare the pictures, then one button gives the share sheet a fresh tap (iOS needs that)
-  const songs = wholeSet ? setItems().songs : [curSong()].filter(Boolean); if (!songs.length) { toast('ยังไม่มีเพลงให้ส่ง'); return; }
+async function shareScores(wholeSet, rec) { // prepare the pictures, then one button gives the share sheet a fresh tap (iOS needs that)
+  const songs = rec ? rec.songs.map(i => S.songs.get(i)).filter(Boolean) : wholeSet ? setItems().songs : [curSong()].filter(Boolean); if (!songs.length) { toast('ยังไม่มีเพลงให้ส่ง'); return; }
   const marks = shareMarksOn(), total = songs.reduce((a, x) => a + x.n, 0), files = []; let n = 0;
   try { for (const x of songs) for (let i = 0; i < x.n; i++) { const f = await pageFile(x, i, marks); if (f) files.push(f); n++; if (total > 3 && n % 2 === 0) toast(`กำลังเตรียมรูป ${n}/${total}…`); } } catch (err) { toast('เตรียมรูปไม่สำเร็จ: ' + (err.message || err)); return; }
   if (!files.length) { toast('ไม่พบรูปโน้ต'); return; }
@@ -893,8 +893,8 @@ async function shareScores(wholeSet) { // prepare the pictures, then one button 
     catch (err) { if (!err || err.name !== 'AbortError') toast('ส่งไม่สำเร็จ ลองอีกครั้ง'); }
   });
 }
-async function shareSet() { // the set as plain text, for people who use the app too (paste it into “พิมพ์รายการ”)
-  const text = setShareText(); if (!text) { toast('ยังไม่มีเพลงในคิวหรือชุดนี้'); return; }
+async function shareSet(rec) { // the set as plain text, for people who use the app too (paste it into “พิมพ์รายการ”)
+  const text = setShareText(rec); if (!text) { toast('ยังไม่มีเพลงในคิวหรือชุดนี้'); return; }
   try { if (navigator.share) { await navigator.share({ text }); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(text); toast('คัดลอกรายการแล้ว ส่งต่อได้เลย'); } catch { toast('ส่งไม่ได้ ลองใหม่อีกครั้ง'); }
 }
@@ -912,6 +912,36 @@ function openSetMore() { // the less-used things (typing a list, sending) live o
     if (k === 'marks') { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } $('#smk', s.el).textContent = on ? 'เปิดอยู่ รูปมีไฮไลต์ ปากกา และการครอป' : 'ปิดอยู่ ส่งต้นฉบับสะอาด'; return; }
     s.close(); if (k === 'list') openListPaste(); else if (k === 'savecur') newSet(true); else if (k === 'song') shareScores(false); else if (k === 'set') shareScores(true); else if (k === 'text') shareSet();
   });
+}
+
+async function deleteSet(x) {
+  if (!(await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด'))) return;
+  await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); toast(`ลบชุด “${x.name}” แล้ว`);
+}
+function closePop() { $('#mkpop')?.remove(); document.removeEventListener('pointerdown', popOutside, true); }
+function popOutside(e) { if (!e.target.closest('#mkpop')) closePop(); }
+function openPop(anchor, items) { // a small menu under a chip: [{ic, t, s, bad, fn}]
+  closePop(); const r = anchor.getBoundingClientRect(), d = document.createElement('div'); d.id = 'mkpop';
+  d.innerHTML = items.map((it, i) => `<button data-pi="${i}" class="${it.bad ? 'bad' : ''}"><span class="pic">${it.ic}</span><span class="pt">${esc(it.t)}${it.s ? `<small>${esc(it.s)}</small>` : ''}</span></button>`).join('');
+  document.body.append(d); const w = d.offsetWidth; d.style.left = Math.max(8, Math.min(r.left, innerWidth - w - 8)) + 'px'; d.style.top = (r.bottom + 8) + 'px';
+  d.addEventListener('click', e => { const b = e.target.closest('[data-pi]'); if (!b) return; const it = items[+b.dataset.pi]; if (it.keep) { it.fn(b); return; } closePop(); it.fn(); });
+  setTimeout(() => document.addEventListener('pointerdown', popOutside, true), 0);
+}
+function chipMenu(x, anchor) {
+  openPop(anchor, [
+    { ic: '✎', t: 'เปลี่ยนชื่อ', fn: () => renameSet(x) },
+    { ic: '⇪', t: 'ส่งโน้ตชุดนี้เป็นรูป', s: 'AirDrop / LINE', fn: () => shareScores(true, x) },
+    { ic: '⇪', t: 'ส่งรายชื่อเป็นข้อความ', s: 'สำหรับคนที่ใช้โน้ตเนตรเหมือนกัน', fn: () => shareSet(x) },
+    { ic: '✎', t: 'แนบรอยที่เขียนตอนส่งรูป: ' + (shareMarksOn() ? 'เปิด' : 'ปิด'), keep: true, fn: b => { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } b.querySelector('.pt').firstChild.textContent = 'แนบรอยที่เขียนตอนส่งรูป: ' + (on ? 'เปิด' : 'ปิด'); } },
+    { ic: '🗑', t: 'ลบชุด', s: 'โน้ตในเครื่องไม่ถูกลบ', bad: true, fn: () => deleteSet(x) },
+  ]);
+}
+function newChipMenu(anchor) {
+  openPop(anchor, [
+    { ic: '＋', t: 'เริ่มชุดว่าง', s: 'เพิ่มเพลงทีละเพลง', fn: () => newSet(false) },
+    { ic: '✎', t: 'พิมพ์รายการเพลง', s: 'วางชื่อเพลงทีละบรรทัดจากไลน์', fn: () => openListPaste() },
+    ...(S.queue.length ? [{ ic: '⤓', t: 'บันทึกคิวนี้เป็นชุด', s: 'เก็บคิวที่มีอยู่', fn: () => newSet(true) }] : []),
+  ]);
 }
 function nextSetName() { let n = 1; while (S.sets.some(x => x.name === 'ชุดใหม่ ' + n)) n++; return 'ชุดใหม่ ' + n; }
 async function newSet(fromQueue) {
@@ -1106,8 +1136,8 @@ const ACT = {
   edit: () => enterEdit(),
   qimp: () => quickPick(),
   qset: () => toggleSetBar(),
-  setchip: d => { const x = S.sets.find(z => z.id === d.id); if (x && x.name !== S.setName) loadSet(x); },
-  setnew: () => newSet(false),
+  setchip: d => { if (justDragged($('#tsets'))) return; const x = S.sets.find(z => z.id === d.id); if (x && x.name !== S.setName) loadSet(x); },
+  setnew: (d, el) => newChipMenu(el),
   web: (d) => openWeb(d.k),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
@@ -1302,7 +1332,7 @@ function endCrop(reload) {
 }
 /* key + tempo per song: chips in the edit bar, a small panel to set them, and a quiet blinking dot on the score */
 const TAPS = [];
-const noteFor = x => { const a = activeSet(); return (a && a.notes && a.notes[x.id]) || null; };
+const noteFor = (x, rec) => { const a = rec || activeSet(); return (a && a.notes && a.notes[x.id]) || null; };
 const withKey = x => { const n = noteFor(x) || {}, k = n.key || x.key || ''; return x.name + (k ? ' · ' + k : '') + (n.key && x.key && n.key !== x.key ? ` (โน้ต ${x.key})` : '') + (n.who ? ' · ' + n.who : '') + (n.shift ? ' · ' + n.shift : '') + (n.note ? ' · ' + n.note : '') + (n.sec ? ' · ช่วง ' + n.sec : ''); };
 function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
 function dotPaint() {
@@ -1479,6 +1509,13 @@ function edgeTap(side) {
 for (const t of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(t, e => e.preventDefault());
 sortable($('#qwrap'), { axis: 'x', itemSel: '.qc[data-id]', hold: 450, onstart: () => $('#strip').classList.add('dragging'), onend: () => $('#strip').classList.remove('dragging'),
   onDrop: ids => setQueueOrder(ids), onRemove: id => removeFromQueue(S.queue.indexOf(id)) });
+let heldChip = null;
+$('#tsets').addEventListener('pointerdown', e => { const c = e.target.closest('.tc[data-id]'); heldChip = c ? c.dataset.id : null; }, true);
+sortable($('#tsets'), { axis: 'x', itemSel: '.tc[data-id]', hold: 450, onDrop: (ids, moved) => {
+  if (moved < 10) { const x = S.sets.find(z => z.id === heldChip), el = $('#tsets .tc[data-id="' + heldChip + '"]'); if (x && el) chipMenu(x, el); return; } // held and let go without moving = menu
+  const by = new Map(S.sets.map(z => [z.id, z])); const next = ids.map(i => by.get(i)).filter(Boolean); S.sets.forEach(z => { if (!next.includes(z)) next.push(z); });
+  next.forEach((z, i) => { if (z.ord !== i + 1) { z.ord = i + 1; DB.putSet(z).catch(() => {}); } }); S.sets = next; renderTop(); toast('จัดลำดับชุดแล้ว');
+} });
 $('#strip').insertAdjacentHTML('afterbegin', '<div class="rmzone">ลากขึ้นมาตรงนี้แล้วปล่อย = เอาออกจากคิว ↑</div>');
 
 // keep the whole app inside the visible area when the on-screen keyboard is open
