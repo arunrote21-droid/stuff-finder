@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-19-e';
+const BUILD = 'sheet-2026-11-21-b';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -255,10 +255,15 @@ async function showPage() {
   saveState();
   if (S.page + 1 < song.n) { pageUrl(song, S.page + 1); if (CROP.on) inkBox(song.id, S.page + 1); } else if (next) { pageUrl(next, 0); if (CROP.on) inkBox(next.id, 0); }
 }
+function renderSetChips() { // every saved set as one small chip in the top bar; tap = open that set
+  const box = $('#tsets'); if (!box) return;
+  box.innerHTML = (S.sets.length ? S.sets.map(x => `<button class="tc ${x.name === S.setName ? 'on' : ''}" data-act="setchip" data-id="${x.id}">${esc(x.name)}</button>`).join('') : '') + `<button class="tc nw" data-act="setnew">＋ ชุดใหม่</button>`;
+  const on = box.querySelector('.tc.on'); if (on) { const l = on.offsetLeft - box.clientWidth / 2 + on.offsetWidth / 2; box.scrollLeft = Math.max(0, l); }
+}
 function renderTop() {
-  const song = curSong();
+  const song = curSong(); renderSetChips();
   $('#tSong').textContent = song ? song.name : 'โน้ตเนตร'; tagPaint();
-  $('#tSet').textContent = S.setName ? `ชุด: ${S.setName}` : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
+  $('#tSet').textContent = S.setName ? S.setName : (S.queue.length ? `คิว ${S.cur + 1}/${S.queue.length}` : `${S.songs.size} เพลงในเครื่อง`);
   if (!song) { $('#tPage').hidden = true; $('#zoomBtn').hidden = true; $('#editBtn').hidden = true; }
 }
 function secStart(id, i) { // first song of each part of the show (parts come from the --- lines of a pasted list)
@@ -605,7 +610,7 @@ function openMenu() {
     <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
-    <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างซ่อนเองเมื่อไม่แตะ แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
+    <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แตะกลางโน้ตเพื่อซ่อนแถบ แตะขอบบน/ล่างเพื่อเรียกกลับ แถบค้างอยู่จนกว่าจะสั่งซ่อน' : 'ปิดอยู่'}</small></span></button>
     <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
     <button data-m="ann"><span class="ic">✎</span><span>แสดงรอยที่วาดบนโน้ต<small>${ANN.show ? 'เปิดอยู่ (กดปุ่ม ✎ ด้านบนเพื่อวาด)' : 'ปิดอยู่ ยังบันทึกรอยไว้'}</small></span></button>
     <button data-m="wish"><span class="ic">♫</span><span>เพลงที่ยังไม่มีโน้ต<small>${WISH.list.length ? WISH.list.length + ' เพลงที่ค้นในเว็บแล้วจดไว้' : 'จดให้เองเมื่อค้นเพลงในเว็บ'}</small></span></button>
@@ -929,7 +934,7 @@ function toggleSetBar() {
     sortable(list, { axis: 'x', itemSel: '.sc[data-id]', hold: 450, onDrop: (ids, moved) => {
       if (moved < 10) { const x = S.sets.find(z => z.id === lastHeld); if (x) { closeSetBar(); renameSet(x); } return; } // held and let go without moving = rename
       const by = new Map(S.sets.map(z => [z.id, z])); const next = ids.map(i => by.get(i)).filter(Boolean); S.sets.forEach(z => { if (!next.includes(z)) next.push(z); });
-      next.forEach((z, i) => { if (z.ord !== i + 1) { z.ord = i + 1; DB.putSet(z).catch(() => {}); } }); S.sets = next; toast('จัดลำดับชุดแล้ว');
+      next.forEach((z, i) => { if (z.ord !== i + 1) { z.ord = i + 1; DB.putSet(z).catch(() => {}); } }); S.sets = next; renderTop(); toast('จัดลำดับชุดแล้ว');
     } });
     list.addEventListener('pointerdown', e => { const c = e.target.closest('.sc[data-id]'); lastHeld = c ? c.dataset.id : null; }, true);
   };
@@ -1101,6 +1106,8 @@ const ACT = {
   edit: () => enterEdit(),
   qimp: () => quickPick(),
   qset: () => toggleSetBar(),
+  setchip: d => { const x = S.sets.find(z => z.id === d.id); if (x && x.name !== S.setName) loadSet(x); },
+  setnew: () => newSet(false),
   web: (d) => openWeb(d.k),
   zoom: () => { zanim(); const r = $('#stage').getBoundingClientRect(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, r.width / 2, r.height / 3); },
 };
@@ -1364,11 +1371,9 @@ function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:a
 
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
 const FS = { on: (() => { try { return localStorage.getItem('sheet:fs') !== '0'; } catch { return true; } })(), t: 0 };
-function chromeArm() {
-  clearTimeout(FS.t); if (!FS.on) return;
-  FS.t = setTimeout(() => { if (S.edit) return; if (FS.hold || document.querySelector('#strip.dragging')) return chromeArm(); if (!S.searching && !document.querySelector('#layer .scrim') && curSong()) $('#app').classList.add('reading'); }, 1500);
-}
-function chromeShow() { if (S.edit) return; $('#app').classList.remove('reading'); chromeArm(); }
+function chromeArm() { clearTimeout(FS.t); } // the bars stay once shown: tap the middle of the score to hide them, the top/bottom edge to bring them back
+let hideT = 0;
+function chromeShow() { if (S.edit) return; $('#app').classList.remove('reading'); }
 function toggleTrim() { CROP.on = !CROP.on; try { localStorage.setItem('sheet:trim', CROP.on ? '1' : '0'); } catch { /* private mode */ } if (!CROP.on) CROP.box = null; showPage(); toast(CROP.on ? 'ตัดขอบขาว: เปิด' : 'ตัดขอบขาว: ปิด'); }
 function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
 document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) { FS.hold = true; chromeArm(); } }, true);
@@ -1462,8 +1467,8 @@ function edgeTap(side) {
     if ($('#app').classList.contains('reading') && !onBtn && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
     if (x > 0.68) { edgeTap(1); lastTap = null; } else if (x < 0.32) { edgeTap(-1); lastTap = null; }
     else { // middle: double tap zooms in / back out
-      if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
-      else lastTap = { t: Date.now(), x: cx, y: cy };
+      if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; clearTimeout(hideT); zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
+      else { lastTap = { t: Date.now(), x: cx, y: cy }; if (FS.on && !$('#app').classList.contains('reading') && curSong()) { clearTimeout(hideT); hideT = setTimeout(() => { if (!S.edit && !S.searching && !document.querySelector('#layer .scrim')) $('#app').classList.add('reading'); }, 340); } }
     }
   };
   stage.addEventListener('pointerup', up); stage.addEventListener('pointercancel', e => { ptrs.delete(e.pointerId); if (!ptrs.size) g = null; });
