@@ -398,3 +398,9 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #mkpop button.bad{color:#f87171}
 .dragclone.tc{display:grid;place-items:center;height:36px;padding:0 14px;border-radius:18px;font-size:.88rem;font-weight:600}
 .tc.slot{opacity:.35;outline:2px dashed var(--ac);background:transparent!important}
+
+/* bars hidden: the score runs up to the very top edge (under the clock), no empty strip above it */
+#app{transition:padding-top .25s}
+#app.reading{padding-top:0}
+#app.reading #songtag{top:calc(env(safe-area-inset-top) + 3px)}
+#app.reading #bpmdot{top:calc(env(safe-area-inset-top) + 12px)}
