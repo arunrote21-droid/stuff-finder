@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-21-c';
+const BUILD = 'sheet-2026-11-21-d';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -610,7 +610,7 @@ function openMenu() {
     <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
-    <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แตะกลางโน้ตเพื่อซ่อนแถบ แตะขอบบน/ล่างเพื่อเรียกกลับ แถบค้างอยู่จนกว่าจะสั่งซ่อน' : 'ปิดอยู่'}</small></span></button>
+    <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างพับเองหลังไม่แตะ 4-5 วินาที แตะกลางโน้ตเพื่อซ่อนทันที แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
     <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
     <button data-m="ann"><span class="ic">✎</span><span>แสดงรอยที่วาดบนโน้ต<small>${ANN.show ? 'เปิดอยู่ (กดปุ่ม ✎ ด้านบนเพื่อวาด)' : 'ปิดอยู่ ยังบันทึกรอยไว้'}</small></span></button>
     <button data-m="wish"><span class="ic">♫</span><span>เพลงที่ยังไม่มีโน้ต<small>${WISH.list.length ? WISH.list.length + ' เพลงที่ค้นในเว็บแล้วจดไว้' : 'จดให้เองเมื่อค้นเพลงในเว็บ'}</small></span></button>
@@ -918,7 +918,7 @@ async function deleteSet(x) {
   if (!(await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด'))) return;
   await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); toast(`ลบชุด “${x.name}” แล้ว`);
 }
-function closePop() { $('#mkpop')?.remove(); document.removeEventListener('pointerdown', popOutside, true); }
+function closePop() { $('#mkpop')?.remove(); document.removeEventListener('pointerdown', popOutside, true); chromeArm(); }
 function popOutside(e) { if (!e.target.closest('#mkpop')) closePop(); }
 function openPop(anchor, items) { // a small menu under a chip: [{ic, t, s, bad, fn}]
   closePop(); const r = anchor.getBoundingClientRect(), d = document.createElement('div'); d.id = 'mkpop';
@@ -1401,14 +1401,23 @@ function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:a
 
 /* reading mode: header and queue strip slide away after a few idle seconds so the score gets the whole screen */
 const FS = { on: (() => { try { return localStorage.getItem('sheet:fs') !== '0'; } catch { return true; } })(), t: 0 };
-function chromeArm() { clearTimeout(FS.t); } // the bars stay once shown: tap the middle of the score to hide them, the top/bottom edge to bring them back
+const BAR_MS = 4500; // the bars fold away by themselves this long after the last touch
+function chromeArm() {
+  clearTimeout(FS.t); if (!FS.on) return;
+  FS.t = setTimeout(() => {
+    if (S.edit) return;
+    if (FS.hold || document.querySelector('#strip.dragging') || document.querySelector('.dragclone') || document.querySelector('#mkpop')) return chromeArm(); // finger or a menu is still in use
+    if (!S.searching && !document.querySelector('#layer .scrim') && !$('#setbar') && curSong()) $('#app').classList.add('reading');
+  }, BAR_MS);
+}
 let hideT = 0;
-function chromeShow() { if (S.edit) return; $('#app').classList.remove('reading'); }
+function chromeShow() { if (S.edit) return; $('#app').classList.remove('reading'); chromeArm(); }
 function toggleTrim() { CROP.on = !CROP.on; try { localStorage.setItem('sheet:trim', CROP.on ? '1' : '0'); } catch { /* private mode */ } if (!CROP.on) CROP.box = null; showPage(); toast(CROP.on ? 'ตัดขอบขาว: เปิด' : 'ตัดขอบขาว: ปิด'); }
 function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
 document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) { FS.hold = true; chromeArm(); } }, true);
 ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { if (FS.hold) { FS.hold = false; chromeArm(); } }, true));
 $('#qwrap').addEventListener('scroll', () => chromeArm(), { passive: true });
+$('#tsets').addEventListener('scroll', () => chromeArm(), { passive: true });
 
 /* remote controls: Bluetooth page-turner pedals / keyboards (keys), rings with a scroll wheel (wheel) */
 const sheetOpen = () => !!document.querySelector('#layer .scrim');
