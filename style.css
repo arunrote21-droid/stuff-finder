@@ -404,3 +404,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #app.reading{padding-top:0}
 #app.reading #songtag{top:calc(env(safe-area-inset-top) + 3px)}
 #app.reading #bpmdot{top:calc(env(safe-area-inset-top) + 12px)}
+
+/* song tag: lower, below the system's frosted strip at the top edge, and a little see-through so it covers less of the score */
+#app.reading #songtag{top:calc(env(safe-area-inset-top) + 26px)}
+#app.reading #bpmdot{top:calc(env(safe-area-inset-top) + 32px)}
+#songtag{background:rgba(27,122,82,.62);opacity:.9}
