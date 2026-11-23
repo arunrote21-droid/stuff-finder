@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-e';
+const BUILD = 'sheet-2026-11-25-f';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -40,17 +40,18 @@ const DB = {
     return new Promise((res, rej) => {
       const r = indexedDB.open('sheet-music', 1);
       r.onupgradeneeded = () => { const d = r.result; d.createObjectStore('songs', { keyPath: 'id' }); d.createObjectStore('pages'); d.createObjectStore('sets', { keyPath: 'id' }); };
-      r.onsuccess = () => { this.db = r.result; res(); };
+      r.onsuccess = () => { this.db = r.result; this.db.onclose = this.db.onversionchange = () => { this.db = null; }; res(); };
       r.onerror = () => rej(r.error);
     });
   },
-  tx(stores, mode, fn) {
-    return new Promise((res, rej) => {
-      const t = this.db.transaction(stores, mode);
-      const out = fn(...stores.map(s => t.objectStore(s)));
+  tx(stores, mode, fn) { // iOS may close the database while the app rests: reopen it and try once more
+    const once = () => new Promise((res, rej) => {
+      let t, out;
+      try { t = this.db.transaction(stores, mode); out = fn(...stores.map(s => t.objectStore(s))); } catch (e) { rej(e); return; }
       t.oncomplete = () => res(out instanceof IDBRequest ? out.result : out);
       t.onerror = t.onabort = () => rej(t.error);
     });
+    return once().catch(async e => { if (!this.db || e?.name === 'InvalidStateError' || e?.name === 'TypeError') { try { logEv('ต่อฐานข้อมูลใหม่'); this.db = null; await this.open(); return await once(); } catch (e2) { throw e2; } } throw e; });
   },
   allSongs: () => DB.tx(['songs'], 'readonly', s => s.getAll()),
   allSets: () => DB.tx(['sets'], 'readonly', s => s.getAll()),
@@ -227,7 +228,8 @@ function rememberUrl(key, blob) {
 }
 async function pageUrl(song, i) {
   const key = song.id + ':' + i; if (urlCache.has(key)) return urlCache.get(key);
-  const b = await DB.page(song.id, i); return b ? rememberUrl(key, b) : null;
+  let b = null; try { b = await DB.page(song.id, i); } catch (e) { logEv('โหลดหน้าไม่สำเร็จ ลองใหม่: ' + String(e?.name || e).slice(0, 40)); try { await new Promise(r => setTimeout(r, 250)); b = await DB.page(song.id, i); } catch { b = null; } }
+  return b ? rememberUrl(key, b) : null;
 }
 async function showPage() {
   const song = curSong(), tok = ++pageToken;
@@ -247,7 +249,7 @@ async function showPage() {
   const [url, box, man] = await Promise.all([pageUrl(song, S.page), CROP.on ? inkBox(song.id, S.page) : null, cropGet(song.id, S.page)]); if (tok !== pageToken) return;
   CROP.manual = !!man; CROP.box = man || box; await annSetPage(song, S.page); if (tok !== pageToken) return;
   if (url) img.src = url; else img.removeAttribute('src');
-  applyZoom(); annRender(); dotPaint(); schedulePrep(900); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
+  applyZoom(); annRender(); dotPaint(); schedulePrep(4000); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
   const next = S.songs.get(S.queue[S.cur + 1]);
@@ -1035,7 +1037,7 @@ function openManage() {
   const mio = new IntersectionObserver(es => { es.forEach(e => { if (!e.isIntersecting) return; mio.unobserve(e.target); const row = e.target; makeThumb(row.dataset.id).then(u => { const im = row.querySelector('img'); if (u && im && row.isConnected) { im.src = u; im.classList.add('on'); } }).catch(() => {}); }); }, { rootMargin: '300px' });
   const mthLoad = () => { mio.disconnect(); s.el.querySelectorAll('.mth').forEach(r => { const u = thumbCache.get(r.dataset.id), im = r.querySelector('img'); if (u) { im.src = u; im.classList.add('on'); } else mio.observe(r); }); };
   paint();
-  $('#mq', s.el).addEventListener('input', e => { q = e.target.value; shown = 80; paint(); });
+  let mtm = 0; $('#mq', s.el).addEventListener('input', e => { q = e.target.value; shown = 80; clearTimeout(mtm); mtm = setTimeout(paint, 150); });
   s.el.addEventListener('click', async e => {
     if (e.target.closest('[data-more]')) { shown += 120; paint(); return; }
     const r = e.target.closest('[data-ren]'); if (r) { const x = S.songs.get(r.dataset.ren); const n = await askText({ title: 'เปลี่ยนชื่อเพลง', value: x.name, ok: 'บันทึก' }); if (n) { x.name = nfc(n); await DB.putSongMeta(x); paint(); renderAll(); } return; }
@@ -1370,11 +1372,12 @@ const TAPS = [];
 const noteFor = (x, rec) => { const a = rec || activeSet(); return (a && a.notes && a.notes[x.id]) || null; };
 const withKey = x => { const n = noteFor(x) || {}, k = n.key || x.key || ''; return x.name + (k ? ' · ' + k : '') + (n.key && x.key && n.key !== x.key ? ` (โน้ต ${x.key})` : '') + (n.who ? ' · ' + n.who : '') + (n.shift ? ' · ' + n.shift : '') + (n.note ? ' · ' + n.note : '') + (n.sec ? ' · ช่วง ' + n.sec : ''); };
 /* hold the green song name, let go: the share sheet opens with this song's pictures (they are prepared in the background so it is instant) */
+const FINGER = { n: 0 }; document.addEventListener('pointerdown', () => { FINGER.n++; }, true); document.addEventListener('pointerup', () => { FINGER.n = Math.max(0, FINGER.n - 1); }, true); document.addEventListener('pointercancel', () => { FINGER.n = 0; }, true);
 const SHARE = { ver: 0, id: null, marks: null, files: null, t: 0 };
-function bumpShare() { SHARE.ver++; SHARE.files = null; schedulePrep(1600); }
+function bumpShare() { SHARE.ver++; SHARE.files = null; schedulePrep(4000); }
 function schedulePrep(ms) {
   clearTimeout(SHARE.t); SHARE.t = setTimeout(async () => {
-    const song = curSong(); if (!song || song.n > 10 || S.edit) return; const marks = shareMarksOn(), ver = SHARE.ver;
+    const song = curSong(); if (!song || song.n > 10 || S.edit) return; if (document.hidden || FINGER.n > 0) { schedulePrep(2500); return; } const marks = shareMarksOn(), ver = SHARE.ver;
     if (SHARE.files && SHARE.id === song.id && SHARE.marks === marks && SHARE.vr === ver) return;
     try { const files = []; for (let i = 0; i < song.n; i++) { const f = await pageFile(song, i, marks); if (f) files.push(f); }
       if (ver === SHARE.ver && curSong() === song) { SHARE.files = files; SHARE.id = song.id; SHARE.marks = marks; SHARE.vr = ver; } } catch { /* the sheet will prepare on demand */ }

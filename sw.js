@@ -8,6 +8,8 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  e.respondWith(fetch(e.request, { cache: 'no-cache' }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); return r; })
-    .catch(() => caches.match(e.request, { ignoreSearch: true })));
+  // wait at most 3 s for the network (weak signal on stage), then use the saved copy; the fresh one still lands in the cache
+  const net = fetch(e.request, { cache: 'no-cache' }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); return r; });
+  const saved = () => caches.match(e.request, { ignoreSearch: true });
+  e.respondWith(Promise.race([net.catch(() => null), new Promise(ok => setTimeout(() => ok(null), 3000))]).then(r => r || saved().then(c => c || net)).catch(() => saved()));
 });
