@@ -433,3 +433,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 /* 7 annotation colours: keep the toolbar on one row on tablets */
 @media (min-width:600px){#etb .ec{gap:3px}#etb .ec button{width:30px;min-width:30px;height:32px}#etb .ec button.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}}
+
+/* messages that remain go to the top of the screen, away from the score */
+#toast{bottom:auto;top:calc(12px + env(safe-area-inset-top));transform:translate(-50%,-14px);opacity:.92;padding:7px 14px;font-size:.85rem}
+#toast.show{transform:translate(-50%,0)}
