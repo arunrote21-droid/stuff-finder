@@ -409,3 +409,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #app.reading #songtag{top:calc(env(safe-area-inset-top) + 26px)}
 #app.reading #bpmdot{top:calc(env(safe-area-inset-top) + 32px)}
 #songtag{background:rgba(27,122,82,.62);opacity:.9}
+
+/* solid status bar (no safe-area inset): nothing is frosted, so the tags sit right at the top */
+#app.reading.sbsolid #songtag{top:4px}
+#app.reading.sbsolid #bpmdot{top:10px}

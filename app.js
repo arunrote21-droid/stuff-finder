@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-22-b';
+const BUILD = 'sheet-2026-11-23-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1539,6 +1539,9 @@ async function keepAwake() { try { if (navigator.wakeLock && document.visibility
 document.addEventListener('visibilitychange', keepAwake); document.addEventListener('pointerdown', keepAwake, { once: true });
 
 /* ───────────── boot ───────────── */
+// does the page still run under the clock (translucent status bar)? if the system gives it a solid bar instead, the safe-area inset is 0 and the tags can sit at the very top
+{ const pr = document.createElement('div'); pr.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none'; document.body.append(pr);
+  const chk = () => { $('#app').classList.toggle('sbsolid', pr.getBoundingClientRect().height < 1); }; chk(); window.addEventListener('resize', chk); setTimeout(chk, 600); }
 (async function boot() {
   try {
     await DB.open();
