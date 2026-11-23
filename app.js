@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-24-b';
+const BUILD = 'sheet-2026-11-25-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1492,16 +1492,16 @@ let lastCorner = 0, pendingSearch = 0;
 document.addEventListener('click', () => { if (pendingSearch && Date.now() - pendingSearch < 700) { pendingSearch = 0; if (!S.searching) openSearch(); } }, true);
 // edge tap = turn the page; a second quick tap on the same edge jumps to the next / previous song instead
 let lastEdge = null;
-function edgeTap(side) {
+function edgeTap(side) { // left/right edge: a double tap skips to the previous/next song (a single tap only folds the bars; pages turn by swiping)
   const now = Date.now();
   if (lastEdge && lastEdge.side === side && now - lastEdge.t < 330) {
-    const back = lastEdge; lastEdge = null;
+    lastEdge = null; clearTimeout(hideT);
     const to = S.cur + side;
-    if (to < 0 || to >= S.queue.length) { S.page = back.page; Z.s = 1; Z.tx = Z.ty = 0; showPage(); toast(side > 0 ? 'จบคิวแล้ว' : 'เป็นเพลงแรกแล้ว'); return; }
+    if (to < 0 || to >= S.queue.length) { toast(side > 0 ? 'จบคิวแล้ว' : 'เป็นเพลงแรกแล้ว'); return; }
     play(to); toast('▶ ' + (curSong()?.name || '')); return;
   }
-  lastEdge = { side, t: now, page: S.page };
-  turn(side);
+  lastEdge = { side, t: now };
+  if (FS.on && !$('#app').classList.contains('reading') && curSong()) { clearTimeout(hideT); hideT = setTimeout(() => { if (!S.edit && !S.searching && !document.querySelector('#layer .scrim')) $('#app').classList.add('reading'); }, 340); }
 }
 // gestures on the score: swipe / edge tap = turn page; pinch = zoom; drag when zoomed = pan; double tap in the middle = zoom
 (() => {
@@ -1542,11 +1542,12 @@ function edgeTap(side) {
     const nb = $('#nextSong'), br = nb.hidden ? null : nb.getBoundingClientRect(), onBtn = !!br && pt.x >= br.left && pt.x <= br.right && pt.y >= br.top && pt.y <= br.bottom;
     if (!onBtn && x > 0.68 && cy > r.height * 0.8) { // bottom-right corner: a quick double tap opens the search with the keyboard
       const now = Date.now();
-      if (lastCorner && now - lastCorner < 330) { lastCorner = null; if (lastEdge) { S.page = lastEdge.page; lastEdge = null; showPage(); } pendingSearch = now; lastTap = null; return; }
+      if (lastCorner && now - lastCorner < 330) { lastCorner = null; lastEdge = null; clearTimeout(hideT); pendingSearch = now; lastTap = null; return; }
       lastCorner = now;
     }
     if ($('#app').classList.contains('reading') && !onBtn && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
-    { // anywhere (page turning is swipe only): one tap folds the bars, a double tap zooms in / back out
+    if (Z.s === 1 && (x > 0.68 || x < 0.32)) { edgeTap(x > 0.5 ? 1 : -1); lastTap = null; }
+    else { // middle (or any place while zoomed): one tap folds the bars, a double tap zooms in / back out
       if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; clearTimeout(hideT); zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
       else { lastTap = { t: Date.now(), x: cx, y: cy }; if (FS.on && !$('#app').classList.contains('reading') && curSong()) { clearTimeout(hideT); hideT = setTimeout(() => { if (!S.edit && !S.searching && !document.querySelector('#layer .scrim')) $('#app').classList.add('reading'); }, 340); } }
     }
@@ -1593,7 +1594,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const st = document.createElement('div'); st.id = 'songtag'; st.hidden = true; $('#stage').append(st); initTagShare(); }
   { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.setAttribute('role', 'button'); dd.setAttribute('aria-label', 'เปิด/ปิดไฟกระพริบจังหวะ'); dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd);
     for (const t of ['pointerdown', 'pointerup']) dd.addEventListener(t, e => e.stopPropagation());
-    dd.addEventListener('click', e => { e.stopPropagation(); const song = curSong(); if (!song) return; if (DOT.off.has(song.id)) DOT.off.delete(song.id); else DOT.off.add(song.id); dotPaint(); toast(DOT.off.has(song.id) ? 'ปิดไฟกระพริบเพลงนี้แล้ว แตะที่จุดอีกครั้งเพื่อเปิด' : 'เปิดไฟกระพริบแล้ว'); }); }
+    dd.addEventListener('click', e => { e.stopPropagation(); const song = curSong(); if (!song) return; if (DOT.off.has(song.id)) DOT.off.delete(song.id); else DOT.off.add(song.id); dotPaint(); }); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
   applyTop(); loadState(); renderAll(); chromeArm();
