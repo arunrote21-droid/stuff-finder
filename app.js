@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-24-a';
+const BUILD = 'sheet-2026-11-24-b';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1363,11 +1363,12 @@ function initTagShare() {
   t.addEventListener('contextmenu', e => e.preventDefault());
 }
 function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
+const DOT = { off: new Set() }; // songs whose blinking dot you switched off for now (until the app is reopened)
 function dotPaint() {
   tagPaint();
   const song = curSong(), d = $('#bpmdot'); if (!d) return;
   const ok = song && song.bpm >= 30; d.hidden = !ok;
-  if (ok) { d.querySelector('span').textContent = song.bpm; const i = d.querySelector('i'); i.style.animation = 'none'; void i.offsetWidth; i.style.animation = `bpmflash ${(60 / song.bpm).toFixed(3)}s linear infinite`; }
+  if (ok) { const off = DOT.off.has(song.id); d.classList.toggle('off', off); d.querySelector('span').textContent = off ? 'ปิด' : song.bpm; const i = d.querySelector('i'); i.style.animation = 'none'; if (!off) { void i.offsetWidth; i.style.animation = `bpmflash ${(60 / song.bpm).toFixed(3)}s linear infinite`; } }
   const k = $('#ekey'), b = $('#ebpm'); if (k && song) { k.textContent = 'คีย์ ' + (song.key || '—'); b.textContent = '♩ ' + (song.bpm || '—'); }
 }
 async function metaSave(song) { try { await DB.putSongMeta(song); } catch { toast('บันทึกคีย์/ความเร็วไม่สำเร็จ'); } dotPaint(); }
@@ -1590,7 +1591,9 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
   { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const st = document.createElement('div'); st.id = 'songtag'; st.hidden = true; $('#stage').append(st); initTagShare(); }
-  { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
+  { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.setAttribute('role', 'button'); dd.setAttribute('aria-label', 'เปิด/ปิดไฟกระพริบจังหวะ'); dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd);
+    for (const t of ['pointerdown', 'pointerup']) dd.addEventListener(t, e => e.stopPropagation());
+    dd.addEventListener('click', e => { e.stopPropagation(); const song = curSong(); if (!song) return; if (DOT.off.has(song.id)) DOT.off.delete(song.id); else DOT.off.add(song.id); dotPaint(); toast(DOT.off.has(song.id) ? 'ปิดไฟกระพริบเพลงนี้แล้ว แตะที่จุดอีกครั้งเพื่อเปิด' : 'เปิดไฟกระพริบแล้ว'); }); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
   applyTop(); loadState(); renderAll(); chromeArm();
