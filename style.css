@@ -413,3 +413,10 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 /* solid status bar (no safe-area inset): nothing is frosted, so the tags sit right at the top */
 #app.reading.sbsolid #songtag{top:4px}
 #app.reading.sbsolid #bpmdot{top:10px}
+
+/* top of the score when the bars are folded: full-bleed, or a solid black / white strip below the clock that the system's frost lands on */
+#app.reading[data-top=black],#app.reading[data-top=white]{padding-top:calc(env(safe-area-inset-top) + var(--tgap,22px))}
+#app.reading[data-top=black]{background:#000}
+#app.reading[data-top=white]{background:#fbfaf6}
+#app.reading[data-top=black] #songtag,#app.reading[data-top=white] #songtag{top:4px}
+#app.reading[data-top=black] #bpmdot,#app.reading[data-top=white] #bpmdot{top:10px}

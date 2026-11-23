@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-23-a';
+const BUILD = 'sheet-2026-11-23-b';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -612,12 +612,13 @@ function openMenu() {
     <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
     <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างพับเองหลังไม่แตะ 4-5 วินาที แตะกลางโน้ตเพื่อซ่อนทันที แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
     <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
+    <button data-m="topbar"><span class="ic">▤</span><span>ขอบบนของจอ<small>เลือกแถบใต้นาฬิกา: โน้ตเต็มขอบ / แถบดำ / แถบขาว</small></span></button>
     <button data-m="ann"><span class="ic">✎</span><span>แสดงรอยที่วาดบนโน้ต<small>${ANN.show ? 'เปิดอยู่ (กดปุ่ม ✎ ด้านบนเพื่อวาด)' : 'ปิดอยู่ ยังบันทึกรอยไว้'}</small></span></button>
     <button data-m="wish"><span class="ic">♫</span><span>เพลงที่ยังไม่มีโน้ต<small>${WISH.list.length ? WISH.list.length + ' เพลงที่ค้นในเว็บแล้วจดไว้' : 'จดให้เองเมื่อค้นเพลงในเว็บ'}</small></span></button>
     <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, wish: openWish, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, topbar: openTopBar, wish: openWish, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
 }
 
 function openRemoteTest() {
@@ -1412,6 +1413,19 @@ function chromeArm() {
 }
 let hideT = 0;
 function chromeShow() { if (S.edit) return; $('#app').classList.remove('reading'); chromeArm(); }
+const topPrefs = () => { try { return { m: localStorage.getItem('sheet:topmode') || 'full', g: Math.min(80, Math.max(0, +(localStorage.getItem('sheet:topgap') || 22))) }; } catch { return { m: 'full', g: 22 }; } };
+function applyTop() { const t = topPrefs(), a = $('#app'); if (!a) return; a.dataset.top = t.m; a.style.setProperty('--tgap', t.g + 'px'); }
+function openTopBar() { // how the top of the score meets the clock strip: choose what looks best on this iPad
+  const t = topPrefs();
+  const s = sheet(`<h3>ขอบบนของจอ</h3><p class="sub">ใช้ตอนแถบเมนูพับ ลองเลือกแบบที่โน้ตชัดที่สุด แล้วปิดหน้าต่างนี้ รอแถบพับ (หรือแตะกลางโน้ต) เพื่อดูผล</p>
+    <div class="pills" id="tbm">${[['full', 'โน้ตเต็มขอบ'], ['black', 'แถบดำ'], ['white', 'แถบขาว']].map(([k, n]) => `<button data-k="${k}" class="${t.m === k ? 'on' : ''}">${n}</button>`).join('')}</div>
+    <div class="kr" style="margin:10px 0 4px"><b style="width:96px;flex:none;font-size:.82rem">ความสูงแถบ</b><input id="tbg" type="range" min="0" max="80" step="2" value="${t.g}" style="flex:1"><b id="tbv" style="width:46px;text-align:right">${t.g}</b></div>
+    <p class="sub" style="margin-top:6px">แถบดำ/ขาว เว้นที่ใต้นาฬิกาให้ฝ้าของระบบไปทับแถบแทนที่จะทับโน้ต ปรับความสูงเพิ่มถ้าบรรทัดบนยังมัว (ค่ามาตรฐาน 22)</p>
+    <div class="row2"><button class="btn" data-x="1">เสร็จ</button></div>`);
+  const save = (m, g) => { try { if (m) localStorage.setItem('sheet:topmode', m); if (g != null) localStorage.setItem('sheet:topgap', String(g)); } catch { /* private mode */ } applyTop(); };
+  s.el.addEventListener('click', e => { const b = e.target.closest('#tbm [data-k]'); if (b) { save(b.dataset.k); s.el.querySelectorAll('#tbm button').forEach(x => x.classList.toggle('on', x === b)); return; } if (e.target.closest('[data-x]')) s.close(); });
+  $('#tbg', s.el).addEventListener('input', e => { $('#tbv', s.el).textContent = e.target.value; save(null, +e.target.value); });
+}
 function toggleTrim() { CROP.on = !CROP.on; try { localStorage.setItem('sheet:trim', CROP.on ? '1' : '0'); } catch { /* private mode */ } if (!CROP.on) CROP.box = null; showPage(); toast(CROP.on ? 'ตัดขอบขาว: เปิด' : 'ตัดขอบขาว: ปิด'); }
 function toggleFs() { FS.on = !FS.on; try { localStorage.setItem('sheet:fs', FS.on ? '1' : '0'); } catch { /* private mode */ } if (FS.on) { chromeArm(); toast('โหมดอ่านเต็มจอ: เปิด'); } else { clearTimeout(FS.t); chromeShow(); toast('โหมดอ่านเต็มจอ: ปิด'); } }
 document.addEventListener('pointerdown', e => { if (e.target.closest('#strip,.top,#layer,#panel')) { FS.hold = true; chromeArm(); } }, true);
@@ -1553,7 +1567,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
-  loadState(); renderAll(); chromeArm();
+  applyTop(); loadState(); renderAll(); chromeArm();
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   window.__sheet = { S, DB, CROP, inkBox, ANN };
 })();
