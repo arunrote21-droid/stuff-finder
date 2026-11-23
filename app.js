@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-f';
+const BUILD = 'sheet-2026-11-25-g';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1545,17 +1545,20 @@ function edgeTap(side) { // left/right edge: a double tap skips to the previous/
   const stage = $('#stage'), ptrs = new Map(); let g = null, lastTap = null;
   const rel = () => stage.getBoundingClientRect();
   const mid = () => { const [a, b] = [...ptrs.values()]; const r = rel(); return { x: (a.x + b.x) / 2 - r.left, y: (a.y + b.y) / 2 - r.top, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 }; };
+  const dropStale = () => { ptrs.clear(); g = null; };
+  document.addEventListener('visibilitychange', dropStale); window.addEventListener('blur', dropStale);
   stage.addEventListener('pointerdown', e => {
+    for (const [id, v] of ptrs) if (Date.now() - v.t > 2500) { ptrs.delete(id); logEv('ล้างนิ้วที่ค้าง'); if (!ptrs.size) g = null; } // a finger that never came up must not turn the next swipe into a pinch
     if (e.target.closest('button')) return;
     try { stage.setPointerCapture(e.pointerId); } catch { /* ignore */ }
-    if (S.edit && ptrs.size === 0) { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); g = annStart(e) ? { mode: 'draw' } : null; return; }
+    if (S.edit && ptrs.size === 0) { ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() }); g = annStart(e) ? { mode: 'draw' } : null; return; }
     if (S.edit && ptrs.size === 1) annCancel();
-    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
     if (ptrs.size === 2) { const m = mid(); g = { mode: 'pinch', d: m.d, mx: m.x, my: m.y }; }
     else if (ptrs.size === 1) g = { mode: 'one', x0: e.clientX, y0: e.clientY, tx0: Z.tx, ty0: Z.ty, t: Date.now(), moved: false };
   });
   stage.addEventListener('pointermove', e => {
-    if (!ptrs.has(e.pointerId) || !g) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!ptrs.has(e.pointerId) || !g) return; ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY, t: Date.now() });
     if (g.mode === 'draw') { annMove(e); return; }
     if (g.mode === 'pinch' && ptrs.size >= 2) {
       const m = mid(); zoomAt(Math.min(5, Math.max(1, Z.s * m.d / g.d)), m.x, m.y);
@@ -1569,11 +1572,11 @@ function edgeTap(side) { // left/right edge: a double tap skips to the previous/
     if (!ptrs.has(e.pointerId)) return; const pt = ptrs.get(e.pointerId); ptrs.delete(e.pointerId);
     if (!g) return;
     if (g.mode === 'draw') { annEnd(); g = null; return; }
-    if (g.mode === 'pinch') { if (ptrs.size < 2) { const [rest] = [...ptrs.values()]; g = rest ? { mode: 'one', x0: rest.x, y0: rest.y, tx0: Z.tx, ty0: Z.ty, t: Date.now(), moved: true, ignore: true } : null; } return; }
+    if (g.mode === 'pinch') { if (ptrs.size < 2) { if (Z.s < 1.15) { if (Z.s > 1) zanim(); resetZoom(); } const [rest] = [...ptrs.values()]; g = rest ? { mode: 'one', x0: rest.x, y0: rest.y, tx0: Z.tx, ty0: Z.ty, t: Date.now(), moved: true, ignore: true } : null; } return; }
     if (g.ignore) { g = null; return; } // the finger left over after a pinch is not a tap
     if (S.edit) { g = null; return; }
     const dx = pt.x - g.x0, dy = pt.y - g.y0, moved = Math.hypot(dx, dy), r = rel(), x = (pt.x - r.left) / r.width, cx = pt.x - r.left, cy = pt.y - r.top, quick = Date.now() - g.t < 600; g = null;
-    if (Z.s === 1 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) { turn(dx < 0 ? 1 : -1); return; }
+    if (Z.s < 1.03 && Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.3) { turn(dx < 0 ? 1 : -1); return; }
     if (moved >= 12 || !quick) return;
     if (S.searching) { closeSearch(); lastTap = null; lastEdge = null; return; } // tapping the score anywhere closes the search
     const nb = $('#nextSong'), br = nb.hidden ? null : nb.getBoundingClientRect(), onBtn = !!br && pt.x >= br.left && pt.x <= br.right && pt.y >= br.top && pt.y <= br.bottom;
@@ -1583,7 +1586,7 @@ function edgeTap(side) { // left/right edge: a double tap skips to the previous/
       lastCorner = now;
     }
     if ($('#app').classList.contains('reading') && !onBtn && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
-    if (Z.s === 1 && (x > 0.68 || x < 0.32)) { edgeTap(x > 0.5 ? 1 : -1); lastTap = null; }
+    if (Z.s < 1.03 && (x > 0.68 || x < 0.32)) { edgeTap(x > 0.5 ? 1 : -1); lastTap = null; }
     else { // middle (or any place while zoomed): one tap folds the bars, a double tap zooms in / back out
       if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; clearTimeout(hideT); zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
       else { lastTap = { t: Date.now(), x: cx, y: cy }; if (FS.on && !$('#app').classList.contains('reading') && curSong()) { clearTimeout(hideT); hideT = setTimeout(() => { if (!S.edit && !S.searching && !document.querySelector('#layer .scrim')) $('#app').classList.add('reading'); }, 340); } }
