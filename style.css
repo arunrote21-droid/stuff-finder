@@ -437,3 +437,12 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 /* messages that remain go to the top of the screen, away from the score */
 #toast{bottom:auto;top:calc(12px + env(safe-area-inset-top));transform:translate(-50%,-14px);opacity:.92;padding:7px 14px;font-size:.85rem}
 #toast.show{transform:translate(-50%,0)}
+
+/* manage songs: thumbnails + preview */
+.lrow .mth{flex:none;width:46px;height:60px;border-radius:6px;background:#f3efe4;overflow:hidden;cursor:pointer}
+.lrow .mth img{width:100%;height:100%;object-fit:cover;object-position:top;opacity:0;transition:opacity .2s;display:block}
+.lrow .mth img.on{opacity:1}
+.lrow .nm[data-pv]{cursor:pointer}
+.pvh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:2px 0 8px}.pvh b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pvh span{color:var(--mut);font-size:.8rem;flex:none}
+.pvb{background:#f3efe4;border-radius:10px;overflow:auto;max-height:56vh;margin-bottom:10px;touch-action:pan-y}
+.pvb img{width:100%;display:block}

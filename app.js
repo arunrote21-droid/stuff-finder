@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-c';
+const BUILD = 'sheet-2026-11-25-d';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -993,20 +993,54 @@ function openSets() {
     const d = e.target.closest('[data-del]'); if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (await confirmDel(`ลบชุด “${x.name}”?`, 'โน้ตในเครื่องไม่ถูกลบ')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); paint(); } }
   });
 }
+async function delSongAsk(x) {
+  if (!x) return false;
+  if (await confirmDel(`ลบ “${x.name}”?`, 'ลบรูปโน้ตเพลงนี้ออกจากเครื่อง (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); renderAll(); return true; }
+  return false;
+}
+function previewSong(x, after) {
+  return new Promise(res => {
+    let i = 0, url = null, alive = true;
+    const s = sheet(`<div class="pvh"><b id="pvn"></b><span id="pvi"></span></div><div class="pvb" id="pvb"><img id="pvimg" alt=""></div>
+      <div class="row2"><button class="btn o" data-a="prev">‹ ก่อนหน้า</button><button class="btn o" data-a="next">ถัดไป ›</button></div>
+      <div class="row2"><button class="btn o" data-a="ren">✎ เปลี่ยนชื่อ</button><button class="btn o" data-a="del" style="color:var(--bad)">🗑 ลบ</button></div>
+      <button class="btn" data-a="x" style="width:100%;margin-top:6px">ปิด</button>`, { onclose: () => { alive = false; if (url) URL.revokeObjectURL(url); res(); } });
+    const show = async () => {
+      $('#pvn', s.el).textContent = x.name; $('#pvi', s.el).textContent = `หน้า ${i + 1}/${x.n}`;
+      const b = await DB.page(x.id, i); if (!alive) return; const old = url; url = b ? URL.createObjectURL(b) : null; $('#pvimg', s.el).src = url || ''; if (old) URL.revokeObjectURL(old);
+    };
+    show();
+    let sx = null; const box = $('#pvb', s.el);
+    box.addEventListener('pointerdown', e => { sx = e.clientX; });
+    box.addEventListener('pointerup', e => { if (sx == null) return; const dx = e.clientX - sx; sx = null; if (Math.abs(dx) > 50) { i = Math.max(0, Math.min(x.n - 1, i + (dx < 0 ? 1 : -1))); show(); } });
+    s.el.addEventListener('click', async e => {
+      const a = e.target.closest('[data-a]')?.dataset.a; if (!a) return;
+      if (a === 'x') s.close();
+      else if (a === 'next') { i = Math.min(x.n - 1, i + 1); show(); }
+      else if (a === 'prev') { i = Math.max(0, i - 1); show(); }
+      else if (a === 'ren') { const n = await askText({ title: 'เปลี่ยนชื่อเพลง', value: x.name, ok: 'บันทึก' }); if (n) { x.name = nfc(n); await DB.putSongMeta(x); $('#pvn', s.el).textContent = x.name; renderAll(); after?.(); } }
+      else if (a === 'del') { if (await delSongAsk(x)) s.close(); }
+    });
+  });
+}
 function openManage() {
   const s = sheet(`<h3>จัดการเพลง</h3><input class="field" id="mq" placeholder="ค้นหาชื่อเพลง…" autocomplete="off"><div id="mlist" style="margin-top:10px"></div>`);
   let q = '', shown = 80;
   const paint = () => {
     const terms = nfc(q).toLowerCase().split(/\s+/).filter(Boolean);
     const list = [...S.songs.values()].filter(x => terms.every(t => nfc(x.name).toLowerCase().includes(t))).sort((a, b) => collator.compare(sortKey(a.name), sortKey(b.name)));
-    $('#mlist', s.el).innerHTML = list.slice(0, shown).map(x => `<div class="lrow"><div class="nm">${hl(x.name, terms)}<small>${x.n} หน้า · ${(x.bytes / 1048576).toFixed(1)} MB</small></div><button class="x" style="color:var(--ink)" data-ren="${x.id}" aria-label="เปลี่ยนชื่อ">✎</button><button class="x" data-del="${x.id}" aria-label="ลบ">🗑</button></div>`).join('') + (list.length > shown ? `<button class="btn o sm more" data-more="1" style="display:flex;margin:6px auto">แสดงเพิ่ม</button>` : '') || '<div class="note">ไม่พบเพลง</div>';
+    $('#mlist', s.el).innerHTML = list.slice(0, shown).map(x => `<div class="lrow"><div class="mth" data-pv="${x.id}" data-id="${x.id}"><img alt=""></div><div class="nm" data-pv="${x.id}">${hl(x.name, terms)}<small>${x.n} หน้า · ${(x.bytes / 1048576).toFixed(1)} MB</small></div><button class="x" style="color:var(--ink)" data-ren="${x.id}" aria-label="เปลี่ยนชื่อ">✎</button><button class="x" data-del="${x.id}" aria-label="ลบ">🗑</button></div>`).join('') + (list.length > shown ? `<button class="btn o sm more" data-more="1" style="display:flex;margin:6px auto">แสดงเพิ่ม</button>` : '') || '<div class="note">ไม่พบเพลง</div>';
+    mthLoad();
   };
+  const mio = new IntersectionObserver(es => { es.forEach(e => { if (!e.isIntersecting) return; mio.unobserve(e.target); const row = e.target; makeThumb(row.dataset.id).then(u => { const im = row.querySelector('img'); if (u && im && row.isConnected) { im.src = u; im.classList.add('on'); } }).catch(() => {}); }); }, { rootMargin: '300px' });
+  const mthLoad = () => { mio.disconnect(); s.el.querySelectorAll('.mth').forEach(r => { const u = thumbCache.get(r.dataset.id), im = r.querySelector('img'); if (u) { im.src = u; im.classList.add('on'); } else mio.observe(r); }); };
   paint();
   $('#mq', s.el).addEventListener('input', e => { q = e.target.value; shown = 80; paint(); });
   s.el.addEventListener('click', async e => {
     if (e.target.closest('[data-more]')) { shown += 120; paint(); return; }
     const r = e.target.closest('[data-ren]'); if (r) { const x = S.songs.get(r.dataset.ren); const n = await askText({ title: 'เปลี่ยนชื่อเพลง', value: x.name, ok: 'บันทึก' }); if (n) { x.name = nfc(n); await DB.putSongMeta(x); paint(); renderAll(); } return; }
-    const d = e.target.closest('[data-del]'); if (d) { const x = S.songs.get(d.dataset.del); if (await confirmDel(`ลบ “${x.name}”?`, 'ลบรูปโน้ตเพลงนี้ออกจากเครื่อง (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); paint(); renderAll(); } }
+    const d = e.target.closest('[data-del]'); if (d) { await delSongAsk(S.songs.get(d.dataset.del)); paint(); return; }
+    const pv = e.target.closest('[data-pv]'); if (pv) { const x = S.songs.get(pv.dataset.pv); if (x) { await previewSong(x, paint); paint(); } return; }
   });
 }
 /* backup: split into parts (so memory stays small), then one share sheet for all parts */
