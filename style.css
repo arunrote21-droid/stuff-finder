@@ -430,3 +430,6 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #bpmdot{pointer-events:auto;cursor:pointer;-webkit-tap-highlight-color:transparent;user-select:none}
 #bpmdot.off i{background:transparent!important;border:3px solid rgba(120,135,128,.7);opacity:.7!important;animation:none!important}
 #bpmdot.off span{opacity:.7}
+
+/* 7 annotation colours: keep the toolbar on one row on tablets */
+@media (min-width:600px){#etb .ec{gap:3px}#etb .ec button{width:30px;min-width:30px;height:32px}#etb .ec button.on{box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--ink)}}

@@ -869,7 +869,7 @@ async function pageFile(song, i, marks) { // one page as a picture to send; with
   const d = gg.getImageData(0, 0, 48, 64).data, a = new Uint8Array(48 * 64); for (let q = 0; q < 48 * 64; q++) a[q] = (d[q * 4] * 299 + d[q * 4 + 1] * 587 + d[q * 4 + 2] * 114) / 1000; const grid = { W: 48, H: 64, a };
   const sx = crop ? Math.round(crop.x0 * W) : 0, sy = crop ? Math.round(crop.y0 * H) : 0, cw = crop ? Math.round((crop.x1 - crop.x0) * W) : W, ch = crop ? Math.round((crop.y1 - crop.y0) * H) : H;
   const c = document.createElement('canvas'); c.width = cw; c.height = ch; const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, cw, ch); g.drawImage(bmp, sx, sy, cw, ch, 0, 0, cw, ch); bmp.close?.();
-  const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
+  const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d', '#f97316': '#ffa05a', '#a855f7': '#c99bff', '#ec4899': '#ff7fbd' };
   g.lineCap = 'round'; g.lineJoin = 'round';
   for (const k of strokes) {
     const dk = strokeDark(k, grid), pts = k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, lw = k.w * W, col = dk ? (LIGHT[k.c] || k.c) : k.c, o = k.o != null ? k.o : (k.t === 'h' ? (dk ? 0.8 : 0.45) : 1);
@@ -1156,7 +1156,7 @@ ANN.lvl = (() => { try { return Object.assign({ p: 30, h: 55 }, JSON.parse(local
 ANN.op = (() => { try { return Object.assign({ p: 100, h: 60 }, JSON.parse(localStorage.getItem('sheet:annop') || '{}')); } catch { return { p: 100, h: 60 }; } })(); // 0..100 per tool
 const annO = t => Math.max(0.05, ANN.op[t] / 100);
 const annW = t => ANN_RANGE[t][0] + (ANN_RANGE[t][1] - ANN_RANGE[t][0]) * (ANN.lvl[t] / 100);
-const ANN_COLORS = [['#ef4444', 'แดง'], ['#22c55e', 'เขียว'], ['#3b82f6', 'น้ำเงิน'], ['#facc15', 'เหลือง']];
+const ANN_COLORS = [['#ef4444', 'แดง'], ['#22c55e', 'เขียว'], ['#3b82f6', 'น้ำเงิน'], ['#facc15', 'เหลือง'], ['#f97316', 'ส้ม'], ['#a855f7', 'ม่วง'], ['#ec4899', 'ชมพู']];
 const annKey = (id, p) => `ann:${id}:${p}`;
 async function annLoad(id, page) {
   const k = annKey(id, page); if (ANN.cache.has(k)) return ANN.cache.get(k);
@@ -1192,7 +1192,7 @@ function annRender() {
   const sv = $('#annsvg'), sn = $('#annsvgn'); if (!sv || !sn) return; const g = pageGeom(), list = ANN.cur && ANN.cur.t !== 'e' ? [...ANN.strokes, ANN.cur] : ANN.strokes;
   const on = (ANN.show || S.edit) && g && list.length; sv.style.display = sn.style.display = on ? '' : 'none'; if (!on) { sv.innerHTML = sn.innerHTML = ''; return; }
   for (const x of [sv, sn]) { x.setAttribute('width', g.W); x.setAttribute('height', g.H); }
-  const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d' };
+  const LIGHT = { '#ef4444': '#ff7a7a', '#22c55e': '#5dff8f', '#3b82f6': '#6fa9ff', '#facc15': '#ffe34d', '#f97316': '#ffa05a', '#a855f7': '#c99bff', '#ec4899': '#ff7fbd' };
   let multiply = '', normal = '';
   for (const k of list) {
     const dk = strokeDark(k), d = annPathD(k.pts.length < 4 ? [...k.pts, k.pts[0] + 0.0005, k.pts[1]] : k.pts, g), w = k.w * g.dw, c = dk ? (LIGHT[k.c] || k.c) : k.c;
