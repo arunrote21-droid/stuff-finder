@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-g';
+const BUILD = 'sheet-2026-11-25-h';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -252,6 +252,7 @@ async function showPage() {
   applyZoom(); annRender(); dotPaint(); schedulePrep(4000); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
+  tagPaint();
   const next = S.songs.get(S.queue[S.cur + 1]);
   const ns = $('#nextSong'); ns.hidden = !(next && S.page === song.n - 1); if (!ns.hidden) ns.textContent = `เพลงต่อไป: ${withKey(next)} ▶`;
   saveState();
@@ -1399,7 +1400,7 @@ function initTagShare() {
   t.addEventListener('pointercancel', () => { t.classList.remove('go'); reset(); });
   t.addEventListener('contextmenu', e => e.preventDefault());
 }
-function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
+function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = ''; if (song) { const n = document.createElement('span'); n.className = 'tn'; n.textContent = withKey(song); t.append(n); if (song.n > 1) { const p = document.createElement('span'); p.className = 'tp'; p.textContent = `${S.page + 1}/${song.n}`; t.append(p); } } t.hidden = !song; } }
 const DOT = { off: new Set() }; // songs whose blinking dot you switched off for now (until the app is reopened)
 function dotPaint() {
   tagPaint();

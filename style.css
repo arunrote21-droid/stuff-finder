@@ -446,3 +446,9 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .pvh{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin:2px 0 8px}.pvh b{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pvh span{color:var(--mut);font-size:.8rem;flex:none}
 .pvb{background:#f3efe4;border-radius:10px;overflow:auto;max-height:56vh;margin-bottom:10px;touch-action:pan-y}
 .pvb img{width:100%;display:block}
+
+/* page number now lives in the green song tag, small and see-through; the bottom dots are hidden */
+.dots{display:none!important}
+#songtag{display:flex;align-items:center;gap:7px}
+#songtag .tn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#songtag .tp{flex:none;font-size:.68rem;font-weight:700;line-height:1;padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.22);color:rgba(255,255,255,.92)}
