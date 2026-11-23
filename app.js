@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-23-b';
+const BUILD = 'sheet-2026-11-23-c';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -168,7 +168,7 @@ async function cropGet(id, page) {
   cropMem.set(k, v); return v;
 }
 async function cropSet(id, page, box) {
-  const k = cropKey(id, page); cropMem.set(k, box);
+  bumpShare(); const k = cropKey(id, page); cropMem.set(k, box);
   try { await (box ? TH.put(k, box) : TH.del(k)); } catch { toast('บันทึกการครอปไม่สำเร็จ'); }
 }
 const bbMem = new Map();
@@ -247,7 +247,7 @@ async function showPage() {
   const [url, box, man] = await Promise.all([pageUrl(song, S.page), CROP.on ? inkBox(song.id, S.page) : null, cropGet(song.id, S.page)]); if (tok !== pageToken) return;
   CROP.manual = !!man; CROP.box = man || box; await annSetPage(song, S.page); if (tok !== pageToken) return;
   if (url) img.src = url; else img.removeAttribute('src');
-  applyZoom(); annRender(); dotPaint(); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
+  applyZoom(); annRender(); dotPaint(); schedulePrep(900); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
   const next = S.songs.get(S.queue[S.cur + 1]);
@@ -1164,7 +1164,7 @@ async function annLoad(id, page) {
   ANN.cache.set(k, v); return v;
 }
 function annSave() {
-  const p = ANN.page; if (!p) return; const k = annKey(p.id, p.page); ANN.cache.set(k, ANN.strokes);
+  bumpShare(); const p = ANN.page; if (!p) return; const k = annKey(p.id, p.page); ANN.cache.set(k, ANN.strokes);
   (ANN.strokes.length ? TH.put(k, { v: 1, strokes: ANN.strokes }) : TH.run('readwrite', st => st.delete(k))).catch(() => toast('บันทึกรอยที่วาดไม่สำเร็จ'));
 }
 function pageGeom() {
@@ -1335,6 +1335,33 @@ function endCrop(reload) {
 const TAPS = [];
 const noteFor = (x, rec) => { const a = rec || activeSet(); return (a && a.notes && a.notes[x.id]) || null; };
 const withKey = x => { const n = noteFor(x) || {}, k = n.key || x.key || ''; return x.name + (k ? ' · ' + k : '') + (n.key && x.key && n.key !== x.key ? ` (โน้ต ${x.key})` : '') + (n.who ? ' · ' + n.who : '') + (n.shift ? ' · ' + n.shift : '') + (n.note ? ' · ' + n.note : '') + (n.sec ? ' · ช่วง ' + n.sec : ''); };
+/* hold the green song name, let go: the share sheet opens with this song's pictures (they are prepared in the background so it is instant) */
+const SHARE = { ver: 0, id: null, marks: null, files: null, t: 0 };
+function bumpShare() { SHARE.ver++; SHARE.files = null; schedulePrep(1600); }
+function schedulePrep(ms) {
+  clearTimeout(SHARE.t); SHARE.t = setTimeout(async () => {
+    const song = curSong(); if (!song || song.n > 10 || S.edit) return; const marks = shareMarksOn(), ver = SHARE.ver;
+    if (SHARE.files && SHARE.id === song.id && SHARE.marks === marks && SHARE.vr === ver) return;
+    try { const files = []; for (let i = 0; i < song.n; i++) { const f = await pageFile(song, i, marks); if (f) files.push(f); }
+      if (ver === SHARE.ver && curSong() === song) { SHARE.files = files; SHARE.id = song.id; SHARE.marks = marks; SHARE.vr = ver; } } catch { /* the sheet will prepare on demand */ }
+  }, ms);
+}
+function shareCurrent() { // runs synchronously inside the tap, so iOS still counts it as a user action
+  const song = curSong(); if (!song) return;
+  if (SHARE.files && SHARE.id === song.id && SHARE.marks === shareMarksOn() && SHARE.vr === SHARE.ver && SHARE.files.length && navigator.canShare && navigator.canShare({ files: SHARE.files })) {
+    logEv('ส่งเพลงเดียว (กดค้างที่ชื่อ)'); navigator.share({ files: SHARE.files }).catch(e => { if (!e || e.name !== 'AbortError') shareScores(false); }); return;
+  }
+  shareScores(false); // not prepared yet: the two-step sheet
+}
+function initTagShare() {
+  const t = $('#songtag'); if (!t) return; let timer = 0, down = false, ready = false;
+  const reset = () => { down = false; ready = false; clearTimeout(timer); t.classList.remove('hold'); tagPaint(); };
+  t.addEventListener('pointerdown', e => { e.stopPropagation(); e.preventDefault(); down = true; ready = false; t.classList.add('hold'); try { t.setPointerCapture(e.pointerId); } catch { /* ok */ }
+    timer = setTimeout(() => { if (down) { ready = true; t.textContent = '⇪ ปล่อยเพื่อส่งเพลงนี้'; t.classList.add('go'); try { navigator.vibrate?.(25); } catch { /* ok */ } } }, 480); });
+  t.addEventListener('pointerup', e => { e.stopPropagation(); if (!down) return; const go = ready; t.classList.remove('go'); reset(); if (go) shareCurrent(); });
+  t.addEventListener('pointercancel', () => { t.classList.remove('go'); reset(); });
+  t.addEventListener('contextmenu', e => e.preventDefault());
+}
 function tagPaint() { const song = curSong(), t = $('#songtag'); if (t) { t.textContent = song ? withKey(song) : ''; t.hidden = !song; } }
 function dotPaint() {
   tagPaint();
@@ -1563,7 +1590,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
   } catch {
     $('#empty').className = 'empty show'; $('#empty').innerHTML = '<h2>เปิดที่เก็บข้อมูลไม่ได้</h2><p>เบราว์เซอร์นี้ไม่อนุญาตให้บันทึกข้อมูล (อาจเป็นโหมดส่วนตัว) ลองเปิดด้วยเบราว์เซอร์ปกติ</p>'; return;
   }
-  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const st = document.createElement('div'); st.id = 'songtag'; st.hidden = true; $('#stage').append(st); }
+  { const sv = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); { const st = document.createElement('div'); st.id = 'songtag'; st.hidden = true; $('#stage').append(st); initTagShare(); }
   { const dd = document.createElement('div'); dd.id = 'bpmdot'; dd.hidden = true; dd.innerHTML = '<span></span><i></i>'; $('#stage').append(dd); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
