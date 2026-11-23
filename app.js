@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-23-c';
+const BUILD = 'sheet-2026-11-24-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1545,8 +1545,7 @@ function edgeTap(side) {
       lastCorner = now;
     }
     if ($('#app').classList.contains('reading') && !onBtn && (cy < r.height * 0.1 || cy > r.height * 0.9)) { chromeShow(); return; } // tap the top/bottom edge to bring the bars back
-    if (x > 0.68) { edgeTap(1); lastTap = null; } else if (x < 0.32) { edgeTap(-1); lastTap = null; }
-    else { // middle: double tap zooms in / back out
+    { // anywhere (page turning is swipe only): one tap folds the bars, a double tap zooms in / back out
       if (lastTap && Date.now() - lastTap.t < 330 && Math.hypot(cx - lastTap.x, cy - lastTap.y) < 40) { lastTap = null; clearTimeout(hideT); zanim(); if (Z.s > 1) resetZoom(); else zoomAt(2.2, cx, cy); }
       else { lastTap = { t: Date.now(), x: cx, y: cy }; if (FS.on && !$('#app').classList.contains('reading') && curSong()) { clearTimeout(hideT); hideT = setTimeout(() => { if (!S.edit && !S.searching && !document.querySelector('#layer .scrim')) $('#app').classList.add('reading'); }, 340); } }
     }
