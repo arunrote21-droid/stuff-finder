@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-b';
+const BUILD = 'sheet-2026-11-25-c';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1540,7 +1540,7 @@ function edgeTap(side) { // left/right edge: a double tap skips to the previous/
     if (moved >= 12 || !quick) return;
     if (S.searching) { closeSearch(); lastTap = null; lastEdge = null; return; } // tapping the score anywhere closes the search
     const nb = $('#nextSong'), br = nb.hidden ? null : nb.getBoundingClientRect(), onBtn = !!br && pt.x >= br.left && pt.x <= br.right && pt.y >= br.top && pt.y <= br.bottom;
-    if (!onBtn && x > 0.68 && cy > r.height * 0.8) { // bottom-right corner: a quick double tap opens the search with the keyboard
+    if (!onBtn && x > 0.8 && cy > r.height * 0.93) { // bottom-right corner: a quick double tap opens the search with the keyboard
       const now = Date.now();
       if (lastCorner && now - lastCorner < 330) { lastCorner = null; lastEdge = null; clearTimeout(hideT); pendingSearch = now; lastTap = null; return; }
       lastCorner = now;
