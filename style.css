@@ -459,3 +459,6 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #enm button{width:48px;height:48px;font-size:1.05rem}
 #enm .enc{gap:10px;padding:0 0 2px 0}
 #enm .enc button{width:auto;height:50px;border-radius:14px;font-size:1.05rem}
+
+/* press & hold a result: no text selection / callout */
+#res .rs .rn,#res .rs .th{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}

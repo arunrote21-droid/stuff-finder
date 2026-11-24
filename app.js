@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-i';
+const BUILD = 'sheet-2026-11-25-j';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -998,7 +998,7 @@ function openSets() {
 }
 async function delSongAsk(x) {
   if (!x) return false;
-  if (await confirmDel(`ลบ “${x.name}”?`, 'ลบรูปโน้ตเพลงนี้ออกจากเครื่อง (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); renderAll(); return true; }
+  if (await confirmDel(`ลบ “${x.name}”?`, 'ลบเพลงนี้ออกจากเครื่อง รวมถึงคิวและชุดเพลงทุกชุด (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); renderAll(); return true; }
   return false;
 }
 function previewSong(x, after) {
@@ -1160,6 +1160,24 @@ document.addEventListener('pointerdown', e => {
   clearTimeout(LP.t); LP.fired = false; LP.x = e.clientX; LP.y = e.clientY;
   LP.t = setTimeout(() => { LP.fired = true; b.classList.add('lp'); setTimeout(() => b.classList.remove('lp'), 500); addFromRow(b, b.dataset.act === 'addnext' ? 'next' : 'end', true); }, 450);
 });
+/* press & hold a song name (or its picture) in the search list: delete it from the library, rename, or look at it big */
+const RL = { t: 0, x: 0, y: 0, fired: false };
+function resultMenu(row) {
+  const x = S.songs.get(row.dataset.id); if (!x) return;
+  openPop(row.querySelector('.rn') || row, [
+    { ic: '🗑', t: 'ลบออกจากคลัง', s: 'ลบเพลงนี้ถาวร (ไม่ใช่แค่เอาออกจากคิว)', bad: true, fn: async () => { if (await delSongAsk(x)) renderResults(); } },
+    { ic: '👁', t: 'ดูภาพใหญ่', s: 'เช็กว่าเป็นเวอร์ชันไหน', fn: () => previewSong(x, renderResults) },
+    { ic: '✎', t: 'เปลี่ยนชื่อ', fn: async () => { const n = await askText({ title: 'เปลี่ยนชื่อเพลง', value: x.name, ok: 'บันทึก' }); if (n) { x.name = nfc(n); await DB.putSongMeta(x); renderAll(); } } },
+  ]);
+}
+document.addEventListener('pointerdown', e => {
+  const h = e.target.closest('#res .rs .rn, #res .rs .th'); if (!h) return;
+  clearTimeout(RL.t); RL.fired = false; RL.x = e.clientX; RL.y = e.clientY; const row = h.closest('.rs');
+  RL.t = setTimeout(() => { RL.fired = true; try { navigator.vibrate?.(20); } catch { /* ok */ } resultMenu(row); }, 500);
+});
+document.addEventListener('contextmenu', e => { if (e.target.closest('#res .rs .rn, #res .rs .th')) e.preventDefault(); });
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => clearTimeout(RL.t)));
+document.addEventListener('pointermove', e => { if (RL.t && Math.hypot(e.clientX - RL.x, e.clientY - RL.y) > 10) clearTimeout(RL.t); });
 document.addEventListener('pointermove', e => { if (LP.t && Math.hypot(e.clientX - LP.x, e.clientY - LP.y) > 10) clearTimeout(LP.t); });
 ['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => clearTimeout(LP.t)));
 const ACT = {
