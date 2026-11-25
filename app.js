@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-c';
+const BUILD = 'sheet-2026-11-26-d';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -222,6 +222,8 @@ function resetZoom() { Z.s = 1; Z.tx = 0; Z.ty = 0; applyZoom(); }
 
 /* ───────────── rendering ───────────── */
 let imgUrl = null, pageToken = 0; const urlCache = new Map();
+/* a page picture is shown from a plain in-memory copy, not from the database's own file handle (iOS can invalidate those after the database is rewritten) */
+const memBlob = async b => new Blob([await b.arrayBuffer()], { type: b.type || 'image/jpeg' });
 function rememberUrl(key, blob) {
   if (urlCache.has(key)) return urlCache.get(key);
   const u = URL.createObjectURL(blob); urlCache.set(key, u);
@@ -231,7 +233,9 @@ function rememberUrl(key, blob) {
 async function pageUrl(song, i) {
   const key = song.id + ':' + i; if (urlCache.has(key)) { const u0 = urlCache.get(key); urlCache.delete(key); urlCache.set(key, u0); return u0; } // reading it makes it the newest
   let b = null; try { b = await DB.page(song.id, i); } catch (e) { logEv('โหลดหน้าไม่สำเร็จ ลองใหม่: ' + String(e?.name || e).slice(0, 40)); try { await new Promise(r => setTimeout(r, 250)); b = await DB.page(song.id, i); } catch { b = null; } }
-  return b ? rememberUrl(key, b) : null;
+  if (!b) return null;
+  try { b = await memBlob(b); } catch { /* fall back to the stored blob */ }
+  return rememberUrl(key, b);
 }
 /* if the picture of a page fails to load (iOS can drop a blob it handed out), rebuild it from the saved copy and note why in the log */
 { const pg = $('#pg'); let tried = { key: '', n: 0 };
@@ -243,7 +247,7 @@ async function pageUrl(song, i) {
     const old = urlCache.get(key); if (old) { try { URL.revokeObjectURL(old); } catch { /* ok */ } urlCache.delete(key); }
     let b = null; try { b = await DB.page(song.id, S.page); } catch { b = null; }
     logEv(`รูปหน้า ${S.page + 1} โหลดไม่ได้ ในเครื่อง: ${b ? (b.size + ' ไบต์ ' + (b.type || '?')) : 'ไม่พบ'} ลองใหม่ ${tried.n}`);
-    if (b && b.size && key === song.id + ':' + S.page) pg.src = rememberUrl(key, b);
+    if (b && b.size && key === song.id + ':' + S.page) { try { b = await memBlob(b); } catch { /* stored blob */ } pg.src = rememberUrl(key, b); }
   });
 }
 async function showPage() {
@@ -509,7 +513,7 @@ function dropPageCaches(song) {
 }
 async function reorderPages(song, order) { // new page j = old page order[j]
   const oldN = song.n, newN = order.length, PRE = ['ann', 'crop', 'bb'];
-  const blobs = []; for (const o of order) { const b = await DB.page(song.id, o); if (!b) throw new Error('อ่านหน้าไม่ได้'); blobs.push(b); }
+  const blobs = []; for (const o of order) { const b = await DB.page(song.id, o); if (!b) throw new Error('อ่านหน้าไม่ได้'); blobs.push(await memBlob(b)); }
   const meta = []; for (const o of order) { const r = {}; for (const p of PRE) { try { r[p] = await TH.get(`${p}:${song.id}:${o}`); } catch { r[p] = undefined; } } meta.push(r); }
   const grown = { ...song, n: newN, bytes: blobs.reduce((a, b) => a + b.size, 0) };
   await DB.rewritePages(grown, blobs, oldN);
