@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-m';
+const BUILD = 'sheet-2026-11-25-n';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -260,7 +260,7 @@ async function showPage() {
 }
 function renderSetChips() { // every saved set as one small chip in the top bar; tap = open that set
   const box = $('#tsets'); if (!box) return;
-  box.innerHTML = (S.sets.length ? S.sets.map(x => `<button class="tc ${x.name === S.setName ? 'on' : ''}" data-act="setchip" data-id="${x.id}">${esc(x.name)}</button>`).join('') : '') + `<button class="tc nw" data-act="setnew">＋ ชุดใหม่</button>`;
+  box.innerHTML = (S.sets.length ? S.sets.map(x => `<button class="tc ${x.name === S.setName ? 'on' : ''}" data-act="setchip" data-id="${x.id}">${x.locked ? '🔒 ' : ''}${esc(x.name)}</button>`).join('') : '') + `<button class="tc nw" data-act="setnew">＋ ชุดใหม่</button>`;
   const on = box.querySelector('.tc.on'); if (on) { const l = on.offsetLeft - box.clientWidth / 2 + on.offsetWidth / 2; box.scrollLeft = Math.max(0, l); }
 }
 function renderTop() {
@@ -736,7 +736,7 @@ function closeSetBar() { $('#setbar')?.remove(); $('#qsetBtn')?.classList.remove
 function setBarOutside(e) { if (!e.target.closest('#setbar,#qsetBtn,.scrim')) closeSetBar(); }
 function setBarHtml() {
   const act = activeSet();
-  const cards = S.sets.map(x => `<button class="sc ${x.name === S.setName ? 'on' : ''}" data-sid="${x.id}" data-id="${x.id}"><b>${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small><span class="sx sr" data-ren="${x.id}" aria-label="เปลี่ยนชื่อชุด">✎</span><span class="sx" data-del="${x.id}" aria-label="ลบชุด">✕</span></button>`).join('');
+  const cards = S.sets.map(x => `<button class="sc ${x.name === S.setName ? 'on' : ''}" data-sid="${x.id}" data-id="${x.id}"><b>${x.locked ? '🔒 ' : ''}${esc(x.name)}</b><small>${x.songs.filter(i => S.songs.has(i)).length} เพลง${x.name === S.setName ? ' · ใช้อยู่' : ''}</small><span class="sx sr" data-ren="${x.id}" aria-label="เปลี่ยนชื่อชุด">✎</span><span class="sx" data-del="${x.id}" aria-label="ลบชุด">✕</span></button>`).join('');
   return '<div class="sbh"><span>แตะ = เปิดชุด · กดค้างแล้วลาก = สลับลำดับ</span><button class="sbm" data-more="1">⋯ เพิ่มเติม</button></div><div class="sbl"><button class="sn" data-new="1"><b>＋ ชุดใหม่</b><small>เริ่มชุดว่าง</small></button>' + cards + '</div>';
 }
 
@@ -918,8 +918,50 @@ function openSetMore() { // the less-used things (typing a list, sending) live o
 }
 
 async function deleteSet(x) {
+  if (!(await guardSet(x))) return;
   if (!(await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด'))) return;
   await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); void 0;
+}
+/* set lock: a 4-digit code (kept on this device as a hash) is asked before a locked set is deleted / renamed, or a song inside it is deleted from the library */
+const PINKEY = 'sheet:lockpin';
+const pinGet = () => { try { return localStorage.getItem(PINKEY) || ''; } catch { return ''; } };
+async function pinHash(p) { try { const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('notenet:' + p)); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join(''); } catch { return 'x' + [...p].reverse().join(''); } }
+function askPin(title, sub) {
+  return new Promise(res => {
+    let v = '', done = false;
+    const s = sheet(`<h3>${esc(title)}</h3><p class="sub" id="pns">${esc(sub || '')}</p><div class="pdots" id="pds"><i></i><i></i><i></i><i></i></div><div class="pinpad">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button data-k="${n}">${n}</button>`).join('')}<button data-k="c" class="o">ยกเลิก</button><button data-k="0">0</button><button data-k="x" class="o">⌫</button></div>`, { onclose: () => { if (!done) { done = true; res(null); } } });
+    const paint = () => s.el.querySelectorAll('#pds i').forEach((d, i) => d.classList.toggle('on', i < v.length));
+    s.el.addEventListener('click', e => {
+      const k = e.target.closest('[data-k]')?.dataset.k; if (k == null) return;
+      if (k === 'c') { s.close(); return; }
+      if (k === 'x') v = v.slice(0, -1); else if (v.length < 4) v += k;
+      paint(); if (v.length === 4) { setTimeout(() => { if (done) return; done = true; res(v); s.close(); }, 120); }
+    });
+  });
+}
+async function verifyPin(why) { // true when the right code was typed (the first time ever it asks you to choose one)
+  const saved = pinGet();
+  if (!saved) {
+    const a = await askPin('ตั้งรหัส 4 หลัก', 'ใช้ปลดล็อกชุดเพลงที่ล็อกไว้ (จำไว้ให้ดี)'); if (!a) return false;
+    const b = await askPin('ใส่รหัสอีกครั้ง', 'ยืนยันรหัสที่ตั้ง'); if (!b) return false;
+    if (a !== b) { toast('รหัสสองครั้งไม่ตรงกัน ลองใหม่'); return false; }
+    try { localStorage.setItem(PINKEY, await pinHash(a)); } catch { toast('บันทึกรหัสไม่สำเร็จ'); return false; }
+    return true;
+  }
+  let sub = why || 'ใส่รหัส 4 หลัก';
+  for (;;) { const p = await askPin('ชุดนี้ล็อกอยู่', sub); if (!p) return false; if (await pinHash(p) === saved) return true; sub = 'รหัสไม่ถูก ลองอีกครั้ง'; try { navigator.vibrate?.(60); } catch { /* ok */ } }
+}
+const guardSet = async x => !x || !x.locked || verifyPin(`ใส่รหัสเพื่อแก้ชุด “${x.name}”`);
+async function toggleLock(x) {
+  if (x.locked) { if (!(await verifyPin(`ใส่รหัสเพื่อปลดล็อกชุด “${x.name}”`))) return; x.locked = false; }
+  else { if (!pinGet() && !(await verifyPin())) return; x.locked = true; }
+  await DB.putSet(x).catch(() => toast('บันทึกไม่สำเร็จ')); renderTop();
+}
+async function changePin() {
+  if (!(await verifyPin('ใส่รหัสเดิมก่อน'))) return;
+  const a = await askPin('รหัสใหม่ 4 หลัก'); if (!a) return; const b = await askPin('ใส่รหัสใหม่อีกครั้ง'); if (!b) return;
+  if (a !== b) { toast('รหัสสองครั้งไม่ตรงกัน ลองใหม่'); return; }
+  try { localStorage.setItem(PINKEY, await pinHash(a)); toast('เปลี่ยนรหัสแล้ว'); } catch { toast('บันทึกรหัสไม่สำเร็จ'); }
 }
 function closePop() { $('#mkpop')?.remove(); document.removeEventListener('pointerdown', popOutside, true); chromeArm(); }
 function popOutside(e) { if (!e.target.closest('#mkpop')) closePop(); }
@@ -936,7 +978,9 @@ function chipMenu(x, anchor) {
     { ic: '⇪', t: 'ส่งโน้ตชุดนี้เป็นรูป', s: 'AirDrop / LINE', fn: () => shareScores(true, x) },
     { ic: '⇪', t: 'ส่งรายชื่อเป็นข้อความ', s: 'สำหรับคนที่ใช้โน้ตเนตรเหมือนกัน', fn: () => shareSet(x) },
     { ic: '✎', t: 'แนบรอยที่เขียนตอนส่งรูป: ' + (shareMarksOn() ? 'เปิด' : 'ปิด'), keep: true, fn: b => { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } b.querySelector('.pt').firstChild.textContent = 'แนบรอยที่เขียนตอนส่งรูป: ' + (on ? 'เปิด' : 'ปิด'); } },
-    { ic: '🗑', t: 'ลบชุด', s: 'โน้ตในเครื่องไม่ถูกลบ', bad: true, fn: () => deleteSet(x) },
+    ...(x.locked ? [{ ic: '🔑', t: 'เปลี่ยนรหัส', fn: () => changePin() }] : []),
+    { ic: x.locked ? '🔓' : '🔒', t: x.locked ? 'ปลดล็อกชุดนี้' : 'ล็อกชุดนี้', s: x.locked ? 'ต้องใส่รหัสก่อน' : 'ลบ / เปลี่ยนชื่อต้องใส่รหัส', fn: () => toggleLock(x) },
+    { ic: '🗑', t: 'ลบชุด', s: x.locked ? '🔒 ต้องใส่รหัส' : 'โน้ตในเครื่องไม่ถูกลบ', bad: true, fn: () => deleteSet(x) },
   ]);
 }
 function newChipMenu(anchor) {
@@ -956,6 +1000,7 @@ async function newSet(fromQueue) {
   if (!fromQueue) openSearch();
 }
 async function renameSet(x) {
+  if (!(await guardSet(x))) return;
   const n = await askText({ title: 'เปลี่ยนชื่อชุด', value: x.name, ok: 'บันทึก' }); if (!n) return; const name = nfc(n).trim();
   if (!name || name === x.name) return; if (S.sets.some(z => z !== x && z.name === name)) { toast('มีชุดชื่อนี้อยู่แล้ว'); return; }
   const was = S.setName === x.name; x.name = name; await DB.putSet(x); if (was) S.setName = name; saveState(); renderTop(); void 0;
@@ -979,6 +1024,7 @@ function toggleSetBar() {
     const rn = e.target.closest('[data-ren]'); if (rn) { const x = S.sets.find(z => z.id === rn.dataset.ren); if (x) { closeSetBar(); renameSet(x); } return; }
     const d = e.target.closest('[data-del]');
     if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (!x) return;
+      if (!(await guardSet(x))) return;
       if (await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); if ($('#setbar')) { bar.innerHTML = setBarHtml(); initSort(); } void 0; }
       return; }
     const b = e.target.closest('[data-sid]'); if (!b) return; const x = S.sets.find(z => z.id === b.dataset.sid); closeSetBar(); if (x) loadSet(x);
@@ -992,11 +1038,12 @@ function openSets() {
   s.el.addEventListener('click', async e => {
     if (e.target.closest('[data-s]')) { s.close(); saveCurrentSet(); return; }
     const o = e.target.closest('[data-open]'); if (o) { const x = S.sets.find(z => z.id === o.dataset.open); s.close(); loadSet(x); return; }
-    const d = e.target.closest('[data-del]'); if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (await confirmDel(`ลบชุด “${x.name}”?`, 'โน้ตในเครื่องไม่ถูกลบ')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); paint(); } }
+    const d = e.target.closest('[data-del]'); if (d) { const x = S.sets.find(z => z.id === d.dataset.del); if (!(await guardSet(x))) return; if (await confirmDel(`ลบชุด “${x.name}”?`, 'โน้ตในเครื่องไม่ถูกลบ')) { await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); paint(); } }
   });
 }
 async function delSongAsk(x) {
   if (!x) return false;
+  const ls = S.sets.find(z => z.locked && z.songs.includes(x.id)); if (ls && !(await verifyPin(`เพลงนี้อยู่ในชุด “${ls.name}” ที่ล็อกไว้`))) return false;
   if (await confirmDel(`ลบ “${x.name}”?`, 'ลบเพลงนี้ออกจากเครื่อง รวมถึงคิวและชุดเพลงทุกชุด (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); renderAll(); return true; }
   return false;
 }

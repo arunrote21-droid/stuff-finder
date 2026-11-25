@@ -470,3 +470,13 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #enm{background:rgba(10,20,15,.42);border-color:rgba(255,255,255,.18);box-shadow:0 6px 20px rgba(0,0,0,.25)}
 #enm input{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85)}
 #enm button,#enm .enc button{background:rgba(10,20,15,.5);color:#fff;border:1px solid rgba(255,255,255,.22);text-shadow:0 1px 3px rgba(0,0,0,.85)}
+
+/* set lock pin pad */
+.pdots{display:flex;justify-content:center;gap:16px;margin:6px 0 16px}
+.pdots i{width:18px;height:18px;border-radius:50%;border:2px solid var(--mut);display:block}
+.pdots i.on{background:var(--ac);border-color:var(--ac)}
+.pinpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:340px;margin:0 auto 6px}
+.pinpad button{height:62px;border-radius:16px;background:var(--s2);color:var(--ink);font-size:1.5rem;font-weight:700}
+.pinpad button.o{font-size:.95rem;color:var(--mut)}
+.pinpad button:active{background:var(--ac);color:var(--acink)}
+.tc .lk{margin-right:3px}
