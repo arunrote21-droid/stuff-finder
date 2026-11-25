@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-a';
+const BUILD = 'sheet-2026-11-26-b';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -59,6 +59,7 @@ const DB = {
   putSong: (song, blobs) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + i)); }),
   delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) { ps.delete(song.id + ':' + i); TH.del('bb:' + song.id + ':' + i); TH.del('ann:' + song.id + ':' + i); TH.del('crop:' + song.id + ':' + i); } }),
   putSongMeta: song => DB.tx(['songs'], 'readwrite', s => s.put(song)),
+  rewritePages: (song, blobs, oldN) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + i)); for (let i = blobs.length; i < oldN; i++) ps.delete(song.id + ':' + i); }),
   addPages: (song, blobs, start) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + (start + i))); }),
   putSet: set => DB.tx(['sets'], 'readwrite', s => s.put(set)),
   delSet: id => DB.tx(['sets'], 'readwrite', s => s.delete(id)),
@@ -253,7 +254,7 @@ async function showPage() {
   applyZoom(); annRender(); dotPaint(); schedulePrep(4000); $('#editBtn').hidden = false; logEv(`เปิด “${song.name.slice(0, 24)}” หน้า ${S.page + 1}/${song.n}`);
   $('#tPage').hidden = false; $('#tPage').textContent = `หน้า ${S.page + 1}/${song.n}`; $('#zoomBtn').hidden = false;
   $('#dots').innerHTML = song.n < 2 ? '' : song.n <= 8 ? Array.from({ length: song.n }, (_, i) => `<span class="pn ${i === S.page ? 'on' : ''}">${i + 1}</span>`).join('') : `<span class="pn on wide">${S.page + 1} / ${song.n}</span>`;
-  tagPaint();
+  tagPaint(); pageBtnsPaint();
   const next = S.songs.get(S.queue[S.cur + 1]);
   const ns = $('#nextSong'); ns.hidden = !(next && S.page === song.n - 1); if (!ns.hidden) ns.textContent = `เพลงต่อไป: ${withKey(next)} ▶`;
   saveState();
@@ -485,6 +486,36 @@ function quickPick() {
   f.click();
 }
 const natCmp = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+/* delete one page of the open song, or move it before / after its neighbour; drawings and crops travel with their page */
+function dropPageCaches(song) {
+  const id = song.id;
+  for (const m of [ANN.cache, cropMem, bbMem]) for (const k of [...m.keys()]) if (k.includes(':' + id + ':')) m.delete(k);
+  for (const k of [...urlCache.keys()]) if (k.startsWith(id + ':')) { URL.revokeObjectURL(urlCache.get(k)); urlCache.delete(k); }
+  if (thumbCache.has(id)) { URL.revokeObjectURL(thumbCache.get(id)); thumbCache.delete(id); }
+  TH.del(id);
+}
+async function reorderPages(song, order) { // new page j = old page order[j]
+  const oldN = song.n, newN = order.length, PRE = ['ann', 'crop', 'bb'];
+  const blobs = []; for (const o of order) { const b = await DB.page(song.id, o); if (!b) throw new Error('อ่านหน้าไม่ได้'); blobs.push(b); }
+  const meta = []; for (const o of order) { const r = {}; for (const p of PRE) { try { r[p] = await TH.get(`${p}:${song.id}:${o}`); } catch { r[p] = undefined; } } meta.push(r); }
+  const grown = { ...song, n: newN, bytes: blobs.reduce((a, b) => a + b.size, 0) };
+  await DB.rewritePages(grown, blobs, oldN);
+  for (let j = 0; j < oldN; j++) for (const p of PRE) { const k = `${p}:${song.id}:${j}`, v = j < newN ? meta[j][p] : undefined; try { if (v !== undefined) await TH.put(k, v); else TH.del(k); } catch { /* the drawing store is optional */ } }
+  song.n = newN; song.bytes = grown.bytes; dropPageCaches(song); bumpShare();
+}
+async function movePage(dir) {
+  const song = curSong(); if (!song) return; const a = S.page, b = a + dir; if (b < 0 || b >= song.n) return;
+  const order = [...Array(song.n).keys()]; [order[a], order[b]] = [order[b], order[a]];
+  try { await reorderPages(song, order); logEv(`ย้ายหน้า ${a + 1} → ${b + 1}`); S.page = b; showPage(); } catch (err) { toast('ย้ายหน้าไม่สำเร็จ: ' + (err.message || err)); }
+}
+async function deletePage() {
+  const song = curSong(); if (!song) return;
+  if (song.n < 2) { toast('เพลงนี้มีหน้าเดียว ลบทั้งเพลงได้ที่เมนู → จัดการเพลง'); return; }
+  const pg = S.page;
+  if (!(await confirmDel(`ลบหน้า ${pg + 1} ของ “${song.name}”?`, 'ลบเฉพาะหน้านี้ หน้าอื่นยังอยู่ (รอยปากกาและการครอปของหน้านี้หายไปด้วย)', 'ลบหน้านี้'))) return;
+  try { await reorderPages(song, [...Array(song.n).keys()].filter(i => i !== pg)); logEv(`ลบหน้า ${pg + 1}`); S.page = Math.min(pg, song.n - 1); showPage(); } catch (err) { toast('ลบหน้าไม่สำเร็จ: ' + (err.message || err)); }
+}
+function pageBtnsPaint() { const song = curSong(); const l = $('#emvl'), r = $('#emvr'), d = $('#edelp'); if (!l) return; l.disabled = !song || S.page <= 0; r.disabled = !song || S.page >= song.n - 1; d.disabled = !song || song.n < 2; }
 /* add pages (pictures / files) to the end of the song that is open, instead of making a new song */
 function addPagesTo(song) {
   const f = $('#fileAny'); f.value = '';
@@ -1365,9 +1396,10 @@ function buildEtb() {
     <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
   $('#app').append(t);
   const nb = document.createElement('div'); nb.id = 'enm'; nb.hidden = true;
-  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div><div class="enc"><button id="eadd">＋ เพิ่มหน้าในเพลงนี้ (รูป/ไฟล์)</button></div>';
+  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div><div class="enc"><button id="eadd">＋ เพิ่มหน้าในเพลงนี้ (รูป/ไฟล์)</button></div><div class="enc enp"><button id="emvl">‹ ย้ายไปก่อน</button><button id="edelp">🗑 ลบหน้านี้</button><button id="emvr">ย้ายไปหลัง ›</button></div>';
   $('#ekey', nb).addEventListener('click', () => openMeta('key')); $('#ebpm', nb).addEventListener('click', () => openMeta('bpm'));
   $('#eadd', nb).addEventListener('click', () => { const sg = curSong(); if (sg) addPagesTo(sg); });
+  $('#emvl', nb).addEventListener('click', () => movePage(-1)); $('#emvr', nb).addEventListener('click', () => movePage(1)); $('#edelp', nb).addEventListener('click', () => deletePage());
   $('#app').append(nb);
   $('#enmx').addEventListener('click', () => { const i = $('#enmi'); i.value = ''; i.focus(); });
   $('#enmi').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });
@@ -1543,7 +1575,7 @@ async function saveEditName() {
 function enterEdit() {
   logEv('เข้าโหมดแก้ไข');
   if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
-  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; dotPaint(); etbPaint(); annRender(); void 0;
+  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; pageBtnsPaint(); dotPaint(); etbPaint(); annRender(); void 0;
 }
 async function exitEdit() { logEv('ออกโหมดแก้ไข'); closeMeta(); if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
 function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); void 0; }

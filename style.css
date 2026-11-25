@@ -481,3 +481,5 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .pinpad button:active{background:var(--ac);color:var(--acink)}
 .tc .lk{margin-right:3px}
 #enm #eadd{background:rgba(10,20,15,.66);color:#fff}
+#enm .enp button{font-size:.92rem}
+#enm .enp button:disabled{opacity:.35}
