@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-o';
+const BUILD = 'sheet-2026-11-26-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -59,6 +59,7 @@ const DB = {
   putSong: (song, blobs) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + i)); }),
   delSong: song => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.delete(song.id); TH.del(song.id); for (let i = 0; i < song.n; i++) { ps.delete(song.id + ':' + i); TH.del('bb:' + song.id + ':' + i); TH.del('ann:' + song.id + ':' + i); TH.del('crop:' + song.id + ':' + i); } }),
   putSongMeta: song => DB.tx(['songs'], 'readwrite', s => s.put(song)),
+  addPages: (song, blobs, start) => DB.tx(['songs', 'pages'], 'readwrite', (ss, ps) => { ss.put(song); blobs.forEach((b, i) => ps.put(b, song.id + ':' + (start + i))); }),
   putSet: set => DB.tx(['sets'], 'readwrite', s => s.put(set)),
   delSet: id => DB.tx(['sets'], 'readwrite', s => s.delete(id)),
   clear: () => { TH.clear(); return DB.tx(['songs', 'pages', 'sets'], 'readwrite', (a, b, c) => { a.clear(); b.clear(); c.clear(); }); },
@@ -484,6 +485,24 @@ function quickPick() {
   f.click();
 }
 const natCmp = (a, b) => a.name.localeCompare(b.name, undefined, { numeric: true });
+/* add pages (pictures / files) to the end of the song that is open, instead of making a new song */
+function addPagesTo(song) {
+  const f = $('#fileAny'); f.value = '';
+  f.onchange = async () => {
+    const all = [...f.files], files = all.filter(x => IMG_EXT.test(x.name) || x.type.startsWith('image/')).sort(natCmp);
+    if (!files.length) { if (all.length) toast('เพิ่มหน้าได้เฉพาะไฟล์รูปภาพ'); return; }
+    const start = song.n; let n = 0;
+    toast(`กำลังเพิ่ม ${files.length} หน้า…`);
+    try {
+      const blobs = []; for (const x of files) { blobs.push(await shrink(new Uint8Array(await x.arrayBuffer()), x.name, QUALITY.normal)); n++; if (files.length > 1) toast(`กำลังเพิ่ม ${n}/${files.length} หน้า…`); }
+      const grown = { ...song, n: start + blobs.length, bytes: (song.bytes || 0) + blobs.reduce((a, b) => a + b.size, 0) };
+      await DB.addPages(grown, blobs, start);
+      song.n = grown.n; song.bytes = grown.bytes; bumpShare(); logEv(`เพิ่ม ${blobs.length} หน้าใน “${song.name.slice(0, 24)}”`);
+      if (curSong() === song) { S.page = start; showPage(); }
+    } catch (err) { toast('เพิ่มหน้าไม่สำเร็จ: ' + (err.message || err)); }
+  };
+  f.click();
+}
 async function quickImport(files) {
   logEv('นำเข้า ' + files.length + ' ไฟล์');
   const isZip = f => /\.zip$/i.test(f.name) || f.type.includes('zip');
@@ -1346,8 +1365,9 @@ function buildEtb() {
     <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
   $('#app').append(t);
   const nb = document.createElement('div'); nb.id = 'enm'; nb.hidden = true;
-  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div>';
+  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div><div class="enc"><button id="eadd">＋ เพิ่มหน้าในเพลงนี้ (รูป/ไฟล์)</button></div>';
   $('#ekey', nb).addEventListener('click', () => openMeta('key')); $('#ebpm', nb).addEventListener('click', () => openMeta('bpm'));
+  $('#eadd', nb).addEventListener('click', () => { const sg = curSong(); if (sg) addPagesTo(sg); });
   $('#app').append(nb);
   $('#enmx').addEventListener('click', () => { const i = $('#enmi'); i.value = ''; i.focus(); });
   $('#enmi').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); e.target.blur(); } });

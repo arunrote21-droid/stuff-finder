@@ -480,3 +480,4 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .pinpad button.o{font-size:.95rem;color:var(--mut)}
 .pinpad button:active{background:var(--ac);color:var(--acink)}
 .tc .lk{margin-right:3px}
+#enm #eadd{background:rgba(10,20,15,.66);color:#fff}
