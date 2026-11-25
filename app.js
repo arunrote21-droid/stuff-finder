@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-25-n';
+const BUILD = 'sheet-2026-11-25-o';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -922,7 +922,7 @@ async function deleteSet(x) {
   if (!(await confirmDel(`ลบชุด “${x.name}”?`, 'ลบแค่ชุดเล่น โน้ตในเครื่องไม่ถูกลบ', 'ลบชุด'))) return;
   await DB.delSet(x.id); S.sets = S.sets.filter(z => z !== x); if (S.setName === x.name) S.setName = ''; saveState(); renderTop(); void 0;
 }
-/* set lock: a 4-digit code (kept on this device as a hash) is asked before a locked set is deleted / renamed, or a song inside it is deleted from the library */
+/* set lock: a 4-digit code (kept on this device as a hash) is asked before a locked set is DELETED; everything else in the set works as usual */
 const PINKEY = 'sheet:lockpin';
 const pinGet = () => { try { return localStorage.getItem(PINKEY) || ''; } catch { return ''; } };
 async function pinHash(p) { try { const d = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('notenet:' + p)); return [...new Uint8Array(d)].map(b => b.toString(16).padStart(2, '0')).join(''); } catch { return 'x' + [...p].reverse().join(''); } }
@@ -951,7 +951,7 @@ async function verifyPin(why) { // true when the right code was typed (the first
   let sub = why || 'ใส่รหัส 4 หลัก';
   for (;;) { const p = await askPin('ชุดนี้ล็อกอยู่', sub); if (!p) return false; if (await pinHash(p) === saved) return true; sub = 'รหัสไม่ถูก ลองอีกครั้ง'; try { navigator.vibrate?.(60); } catch { /* ok */ } }
 }
-const guardSet = async x => !x || !x.locked || verifyPin(`ใส่รหัสเพื่อแก้ชุด “${x.name}”`);
+const guardSet = async x => !x || !x.locked || verifyPin(`ใส่รหัสเพื่อลบชุด “${x.name}”`);
 async function toggleLock(x) {
   if (x.locked) { if (!(await verifyPin(`ใส่รหัสเพื่อปลดล็อกชุด “${x.name}”`))) return; x.locked = false; }
   else { if (!pinGet() && !(await verifyPin())) return; x.locked = true; }
@@ -979,7 +979,7 @@ function chipMenu(x, anchor) {
     { ic: '⇪', t: 'ส่งรายชื่อเป็นข้อความ', s: 'สำหรับคนที่ใช้โน้ตเนตรเหมือนกัน', fn: () => shareSet(x) },
     { ic: '✎', t: 'แนบรอยที่เขียนตอนส่งรูป: ' + (shareMarksOn() ? 'เปิด' : 'ปิด'), keep: true, fn: b => { const on = !shareMarksOn(); try { localStorage.setItem('sheet:sharemarks', on ? '1' : '0'); } catch { /* ok */ } b.querySelector('.pt').firstChild.textContent = 'แนบรอยที่เขียนตอนส่งรูป: ' + (on ? 'เปิด' : 'ปิด'); } },
     ...(x.locked ? [{ ic: '🔑', t: 'เปลี่ยนรหัส', fn: () => changePin() }] : []),
-    { ic: x.locked ? '🔓' : '🔒', t: x.locked ? 'ปลดล็อกชุดนี้' : 'ล็อกชุดนี้', s: x.locked ? 'ต้องใส่รหัสก่อน' : 'ลบ / เปลี่ยนชื่อต้องใส่รหัส', fn: () => toggleLock(x) },
+    { ic: x.locked ? '🔓' : '🔒', t: x.locked ? 'ปลดล็อกชุดนี้' : 'ล็อกชุดนี้', s: x.locked ? 'ต้องใส่รหัสก่อน' : 'กันเผลอลบชุด (ต้องใส่รหัสก่อนลบ)', fn: () => toggleLock(x) },
     { ic: '🗑', t: 'ลบชุด', s: x.locked ? '🔒 ต้องใส่รหัส' : 'โน้ตในเครื่องไม่ถูกลบ', bad: true, fn: () => deleteSet(x) },
   ]);
 }
@@ -1000,7 +1000,6 @@ async function newSet(fromQueue) {
   if (!fromQueue) openSearch();
 }
 async function renameSet(x) {
-  if (!(await guardSet(x))) return;
   const n = await askText({ title: 'เปลี่ยนชื่อชุด', value: x.name, ok: 'บันทึก' }); if (!n) return; const name = nfc(n).trim();
   if (!name || name === x.name) return; if (S.sets.some(z => z !== x && z.name === name)) { toast('มีชุดชื่อนี้อยู่แล้ว'); return; }
   const was = S.setName === x.name; x.name = name; await DB.putSet(x); if (was) S.setName = name; saveState(); renderTop(); void 0;
@@ -1043,7 +1042,6 @@ function openSets() {
 }
 async function delSongAsk(x) {
   if (!x) return false;
-  const ls = S.sets.find(z => z.locked && z.songs.includes(x.id)); if (ls && !(await verifyPin(`เพลงนี้อยู่ในชุด “${ls.name}” ที่ล็อกไว้`))) return false;
   if (await confirmDel(`ลบ “${x.name}”?`, 'ลบเพลงนี้ออกจากเครื่อง รวมถึงคิวและชุดเพลงทุกชุด (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)')) { await DB.delSong(x); S.songs.delete(x.id); S.queue = S.queue.filter(i => i !== x.id); S.cur = Math.min(S.cur, Math.max(0, S.queue.length - 1)); for (const set of S.sets) { const f = set.songs.filter(i => i !== x.id); if (f.length !== set.songs.length) { set.songs = f; DB.putSet(set); } } saveState(); renderAll(); return true; }
   return false;
 }
