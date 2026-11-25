@@ -462,3 +462,6 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 /* press & hold a result: no text selection / callout */
 #res .rs .rn,#res .rs .th{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
+
+/* search open: keep the search box below the clock / system frost at the top edge (same gap as the folded-bars strip) */
+#app.searching{padding-top:calc(env(safe-area-inset-top) + var(--tgap,22px))}
