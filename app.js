@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-b';
+const BUILD = 'sheet-2026-11-26-c';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -225,13 +225,26 @@ let imgUrl = null, pageToken = 0; const urlCache = new Map();
 function rememberUrl(key, blob) {
   if (urlCache.has(key)) return urlCache.get(key);
   const u = URL.createObjectURL(blob); urlCache.set(key, u);
-  while (urlCache.size > 4) { const k = urlCache.keys().next().value; URL.revokeObjectURL(urlCache.get(k)); urlCache.delete(k); }
+  while (urlCache.size > 4) { const cur = $('#pg')?.src, k = [...urlCache.keys()].find(x => urlCache.get(x) !== cur); if (!k) break; URL.revokeObjectURL(urlCache.get(k)); urlCache.delete(k); } // never let go of the picture that is on screen
   return u;
 }
 async function pageUrl(song, i) {
-  const key = song.id + ':' + i; if (urlCache.has(key)) return urlCache.get(key);
+  const key = song.id + ':' + i; if (urlCache.has(key)) { const u0 = urlCache.get(key); urlCache.delete(key); urlCache.set(key, u0); return u0; } // reading it makes it the newest
   let b = null; try { b = await DB.page(song.id, i); } catch (e) { logEv('โหลดหน้าไม่สำเร็จ ลองใหม่: ' + String(e?.name || e).slice(0, 40)); try { await new Promise(r => setTimeout(r, 250)); b = await DB.page(song.id, i); } catch { b = null; } }
   return b ? rememberUrl(key, b) : null;
+}
+/* if the picture of a page fails to load (iOS can drop a blob it handed out), rebuild it from the saved copy and note why in the log */
+{ const pg = $('#pg'); let tried = { key: '', n: 0 };
+  pg.addEventListener('load', () => { tried.n = 0; });
+  pg.addEventListener('error', async () => {
+    const song = curSong(); if (!song || !pg.getAttribute('src')) return;
+    const key = song.id + ':' + S.page; if (tried.key !== key) tried = { key, n: 0 };
+    if (tried.n++ >= 3) { logEv(`รูปหน้า ${S.page + 1} โหลดไม่ได้ (ลองครบแล้ว)`); return; }
+    const old = urlCache.get(key); if (old) { try { URL.revokeObjectURL(old); } catch { /* ok */ } urlCache.delete(key); }
+    let b = null; try { b = await DB.page(song.id, S.page); } catch { b = null; }
+    logEv(`รูปหน้า ${S.page + 1} โหลดไม่ได้ ในเครื่อง: ${b ? (b.size + ' ไบต์ ' + (b.type || '?')) : 'ไม่พบ'} ลองใหม่ ${tried.n}`);
+    if (b && b.size && key === song.id + ':' + S.page) pg.src = rememberUrl(key, b);
+  });
 }
 async function showPage() {
   const song = curSong(), tok = ++pageToken;
