@@ -465,3 +465,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 
 /* search open: keep the search box below the clock / system frost at the top edge (same gap as the folded-bars strip) */
 #app.searching{padding-top:calc(env(safe-area-inset-top) + var(--tgap,22px))}
+
+/* edit panel: see-through so the notes behind stay visible */
+#enm{background:rgba(10,20,15,.42);border-color:rgba(255,255,255,.18);box-shadow:0 6px 20px rgba(0,0,0,.25)}
+#enm input{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85)}
+#enm button,#enm .enc button{background:rgba(10,20,15,.5);color:#fff;border:1px solid rgba(255,255,255,.22);text-shadow:0 1px 3px rgba(0,0,0,.85)}
