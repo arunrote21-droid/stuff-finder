@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-q';
+const BUILD = 'sheet-2026-11-26-r';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1936,6 +1936,18 @@ async function ownerIssue(days, note, redeemDays = 90, dev = null) { // dev: 5 b
   list.unshift({ code, days, note: note || '', day: dayNum(), dev: dev ? devFmt(b32enc(dev)) : '' }); try { localStorage.setItem(LIC.ISSUED, JSON.stringify(list.slice(0, 200))); } catch { /* storage */ }
   return code;
 }
+const planName = d => ({ 7: 'ทดลอง 7 วัน', 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี', 3650: '10 ปี' })[d] || (d + ' วัน');
+const licMessage = (code, days) => `ขอบคุณที่สนับสนุนโน้ตเนตรครับ 🙏
+นี่คือรหัสปลดล็อก แพ็กเกจ ${planName(days)}
+
+${code}
+
+วิธีใช้
+1. เปิดแอปโน้ตเนตร แตะ ☰ (เมนู)
+2. แตะการ์ดสีเขียวบนสุด “สถานะการใช้งาน”
+3. แตะ “มีรหัสแล้ว? ใส่ที่นี่” แล้ววางรหัสด้านบน กด “ใส่รหัส”
+
+รหัสนี้ต้องใส่ภายใน 90 วันนับจากวันนี้ ถ้ามีปัญหาทักมาได้เลยครับ`;
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('คัดลอกแล้ว'); } catch { toast('คัดลอกไม่ได้ กดค้างที่ข้อความแล้วเลือกคัดลอก'); } }
 function openOwner(onclose) {
   const paint = () => {
@@ -1953,7 +1965,7 @@ function openOwner(onclose) {
       <input class="field" id="ownDev" placeholder="รหัสเครื่องของลูกค้า เช่น K7QM-4TDA" maxlength="12" autocapitalize="characters" spellcheck="false" style="margin-top:8px;display:none">
       <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
       <div id="ownOut"></div>
-      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอก</button></div>`).join('')}</div>` : ''}
+      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
       <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
       <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>
       <h3 style="margin-top:16px">ใช้กุญแจสำรองแทน</h3><p class="sub">ถ้ากุญแจในเครื่องนี้ไม่ใช่ของแอป (เช่นสร้างผิดครั้ง) วางกุญแจสำรองที่เก็บไว้ที่นี่</p><textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o sm" data-o="imp" style="margin-top:8px">ใช้กุญแจสำรองนี้</button>`;
@@ -1968,9 +1980,10 @@ function openOwner(onclose) {
       else if (a === 'imp') { const t = $('#ownImp', s.el).value.trim(); const o = JSON.parse(t); if (!o.priv || !o.pub) throw new Error('x'); localStorage.setItem(LIC.OWNER, JSON.stringify(o)); await ownerCheck(); paint(); licCheck(true); }
       else if (a === 'cpub') copyText(ownerGet().pub);
       else if (a === 'bak') copyText(JSON.stringify(ownerGet()));
-      else if (a === 'issue') { let dev = null; if (bind) { dev = b32dec($('#ownDev', s.el).value); if (!dev) { toast('รหัสเครื่องไม่ถูกต้อง ต้องมี 8 ตัวอักษร เช่น K7QM-4TDA'); return; } } const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim(), 90, dev); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (ส่งให้ผู้ใช้ รหัสนี้ต้องใส่ภายใน 90 วัน):</p><textarea class="field" readonly rows="4" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกรหัส</button>`; }
+      else if (a === 'issue') { let dev = null; if (bind) { dev = b32dec($('#ownDev', s.el).value); if (!dev) { toast('รหัสเครื่องไม่ถูกต้อง ต้องมี 8 ตัวอักษร เช่น K7QM-4TDA'); return; } } const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim(), 90, dev); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (ส่งให้ผู้ใช้ รหัสนี้ต้องใส่ภายใน 90 วัน):</p><button class="btn" data-o="cmsg" data-days="${dur}" style="width:100%;margin-bottom:8px">คัดลอกข้อความพร้อมส่ง (รหัส + วิธีใช้)</button><textarea class="field" readonly rows="3" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกเฉพาะรหัส</button>`; }
       else if (a === 'ccode') copyText($('#ownCode', s.el).value);
-      else if (a === 'cp') { let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ } copyText(list[+e.target.closest('[data-i]').dataset.i].code); }
+      else if (a === 'cmsg') copyText(licMessage($('#ownCode', s.el).value, +e.target.closest('[data-days]').dataset.days));
+      else if (a === 'cp') { let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ } const it = list[+e.target.closest('[data-i]').dataset.i]; copyText(licMessage(it.code, it.days)); }
     } catch (err) { toast('ทำไม่สำเร็จ: ' + (err.message || err)); }
   });
 }
