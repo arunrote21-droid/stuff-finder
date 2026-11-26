@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-n';
+const BUILD = 'sheet-2026-11-26-o';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1878,10 +1878,7 @@ function licPage(pfx, collapsed) {
     <button class="btn licline" id="${pfx}line"><span class="lcic">${chat}</span><span class="lctx"></span></button>
     <p class="lictrust">โน้ตของคุณอยู่ในเครื่องนี้ ไม่อัปโหลดขึ้นเซิร์ฟเวอร์<br>ใช้ได้ถึงวันครบกำหนด ไม่มีการต่ออายุอัตโนมัติ</p>
     <div class="licsec">ขั้นตอนการสมัคร</div>
-    <ol class="licsteps"><li><span>1</span>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</li><li><span>2</span>โอนเงิน แล้วกด “ส่งรหัสเครื่อง” ด้านล่าง พร้อมแนบสลิปในแชต</li><li><span>3</span>รับ <b>รหัสปลดล็อก</b> ที่ใช้ได้กับเครื่องนี้เครื่องเดียว</li><li><span>4</span>วางรหัสในช่องด้านล่าง ใช้งานต่อได้ทันที</li></ol>
-    <div class="licdev"><span>รหัสเครื่องของคุณ</span><b>${devFmt(devId())}</b></div>
-    <button class="btn o" id="${pfx}dev">ส่งรหัสเครื่องให้ผู้พัฒนาทาง LINE (หลังโอนเงิน)</button>
-    <p class="lictrust">หนึ่งรหัสใช้ได้กับหนึ่งเครื่อง ถ้าเปลี่ยนเครื่อง ทักมาเพื่อขอรหัสใหม่ได้</p>
+    <ol class="licsteps"><li><span>1</span>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</li><li><span>2</span>โอนเงิน แล้วส่งสลิปมาในแชต</li><li><span>3</span>รับ <b>รหัสปลดล็อก</b> กลับมา</li><li><span>4</span>วางรหัสในช่องด้านล่าง ใช้งานต่อได้ทันที</li></ol>
     ${collapsed ? `<details class="lichave"><summary>มีรหัสแล้ว? ใส่ที่นี่</summary>${code}</details>` : `<div class="lichave"><b>มีรหัสแล้ว? ใส่ที่นี่</b>${code}</div>`}</div>`;
 }
 async function lineOpen(text) {
@@ -1894,7 +1891,6 @@ function licWire(root, pfx, onOk) {
   const paintBtn = () => { const p = LIC.PLANS[sel]; btn.querySelector('.lctx').textContent = `แจ้งซื้อแพ็กเกจ ${p.name} · ${p.price} บาท ทาง LINE`; root.querySelectorAll('.plan').forEach((b, i) => b.classList.toggle('on', i === sel)); };
   root.querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.p; paintBtn(); }));
   btn.addEventListener('click', () => { const p = LIC.PLANS[sel]; lineOpen(`ซื้อโน้ตเนตร ${p.name} ${p.price} บาท`); }); // short and exact: it is also the keyword the LINE OA auto-replies to
-  $('#' + pfx + 'dev', root).addEventListener('click', () => lineOpen(`รหัสเครื่อง: ${devFmt(devId())}`));
   const msg = (t, ok) => { const m = $('#' + pfx + 'm', root); m.textContent = t; m.className = 'licm' + (ok ? ' ok' : ''); };
   $('#' + pfx + 'paste', root).onclick = async () => { try { $('#' + pfx + 'c', root).value = await navigator.clipboard.readText(); } catch { msg('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก วาง'); } };
   $('#' + pfx + 'go', root).onclick = async () => { const r = await licRedeem($('#' + pfx + 'c', root).value); if (!r.ok) { msg(r.msg); return; } msg(r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); onOk?.(); };
@@ -1911,7 +1907,7 @@ function licCheck(allowLock) { // allowLock: only when the app is opened or come
 }
 function openLicence() {
   const st = licStatus();
-  const s = sheet(`<h3>สถานะการใช้งาน</h3><p class="licnow">${esc(licLeftText(st))}</p>${st.mode === 'owner' ? '' : licPage('lc', true)}`);
+  const s = sheet(`<h3>สถานะการใช้งาน</h3><p class="licnow">${esc(licLeftText(st))}</p>${st.mode === 'owner' ? '' : licPage('lc', true)}<p class="sub" style="margin-top:16px;font-size:.78rem">รหัสเครื่อง (บอกผู้พัฒนาเมื่อถูกขอเท่านั้น): <b>${devFmt(devId())}</b></p>`);
   if (st.mode !== 'owner') licWire(s.el, 'lc');
 }
 /* owner tools: reached by tapping the title of "ข้อมูลและพื้นที่" seven times */
@@ -1943,8 +1939,8 @@ function openOwner(onclose) {
       <h3 style="margin-top:16px">ออกรหัสให้ผู้ใช้</h3>
       <div class="pills" id="ownDur">${[[7, 'ทดลอง 7 วัน'], [30, '1 เดือน'], [90, '3 เดือน'], [180, '6 เดือน'], [365, '1 ปี'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
       <input class="field" id="ownNote" placeholder="ชื่อผู้ใช้ (จดไว้เอง ไม่ใส่ก็ได้)" maxlength="40" style="margin-top:8px">
-      <div class="pills" id="ownBind" style="margin-top:8px"><button data-b="1" class="on">ผูกกับเครื่องลูกค้า (แนะนำ)</button><button data-b="0">ไม่ผูก (ให้เพื่อน/ทดสอบ)</button></div>
-      <input class="field" id="ownDev" placeholder="รหัสเครื่องของลูกค้า เช่น K7QM-4TDA" maxlength="12" autocapitalize="characters" spellcheck="false" style="margin-top:8px">
+      <div class="pills" id="ownBind" style="margin-top:8px"><button data-b="0" class="on">ใช้ได้ทุกเครื่อง (ปกติ)</button><button data-b="1">ผูกกับเครื่องเดียว</button></div>
+      <input class="field" id="ownDev" placeholder="รหัสเครื่องของลูกค้า เช่น K7QM-4TDA" maxlength="12" autocapitalize="characters" spellcheck="false" style="margin-top:8px;display:none">
       <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
       <div id="ownOut"></div>
       ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอก</button></div>`).join('')}</div>` : ''}
@@ -1952,7 +1948,7 @@ function openOwner(onclose) {
       <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>
       <h3 style="margin-top:16px">ใช้กุญแจสำรองแทน</h3><p class="sub">ถ้ากุญแจในเครื่องนี้ไม่ใช่ของแอป (เช่นสร้างผิดครั้ง) วางกุญแจสำรองที่เก็บไว้ที่นี่</p><textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o sm" data-o="imp" style="margin-top:8px">ใช้กุญแจสำรองนี้</button>`;
   };
-  const s = sheet('<h3>เมนูเจ้าของ</h3><div id="ownBox"></div>', { onclose }), box = $('#ownBox', s.el); paint(); let dur = 30, bind = true;
+  const s = sheet('<h3>เมนูเจ้าของ</h3><div id="ownBox"></div>', { onclose }), box = $('#ownBox', s.el); paint(); let dur = 30, bind = false;
   s.el.addEventListener('click', async e => {
     const bd = e.target.closest('#ownBind [data-b]'); if (bd) { bind = bd.dataset.b === '1'; s.el.querySelectorAll('#ownBind [data-b]').forEach(b => b.classList.toggle('on', b === bd)); $('#ownDev', s.el).style.display = bind ? '' : 'none'; return; }
     const d = e.target.closest('#ownDur [data-d]'); if (d) { dur = +d.dataset.d; s.el.querySelectorAll('#ownDur [data-d]').forEach(b => b.classList.toggle('on', b === d)); return; }
