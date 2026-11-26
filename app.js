@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-d';
+const BUILD = 'sheet-2026-11-26-e';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1413,8 +1413,23 @@ function buildEtb() {
     <div class="eg"><button data-e="undo" aria-label="ย้อนกลับ">↶</button><button data-e="redo" aria-label="ทำซ้ำ">↷</button><button data-e="prev" aria-label="หน้าก่อน">‹</button><button data-e="next" aria-label="หน้าถัดไป">›</button><button data-e="clear">ล้างหน้า</button><button data-e="done" class="done">เสร็จ</button></div>`;
   $('#app').append(t);
   const nb = document.createElement('div'); nb.id = 'enm'; nb.hidden = true;
-  nb.innerHTML = '<input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div><div class="enc"><button id="eadd">＋ เพิ่มหน้าในเพลงนี้ (รูป/ไฟล์)</button></div><div class="enc enp"><button id="emvl">‹ ย้ายไปก่อน</button><button id="edelp">🗑 ลบหน้านี้</button><button id="emvr">ย้ายไปหลัง ›</button></div>';
+  nb.innerHTML = '<span id="edrag" aria-label="ลากเพื่อย้ายแผง">⠿</span><input id="enmi" maxlength="120" autocomplete="off" aria-label="ชื่อเพลง"><button id="enmx" aria-label="ลบชื่อทั้งหมด">✕</button><button id="efold" aria-label="ยุบ/ขยายแผง">▴</button><div class="enc"><button id="ekey">คีย์ —</button><button id="ebpm">♩ —</button></div><div class="enc"><button id="eadd">＋ เพิ่มหน้าในเพลงนี้ (รูป/ไฟล์)</button></div><div class="enc enp"><button id="emvl">‹ ย้ายไปก่อน</button><button id="edelp">🗑 ลบหน้านี้</button><button id="emvr">ย้ายไปหลัง ›</button></div>';
   $('#ekey', nb).addEventListener('click', () => openMeta('key')); $('#ebpm', nb).addEventListener('click', () => openMeta('bpm'));
+  { /* fold the panel to a small tab, or drag it away from what you are writing; both are remembered */
+    const PK = 'sheet:enmpos', FK = 'sheet:enmfold', ed = $('#edrag', nb), fb = $('#efold', nb);
+    const lsGet = k => { try { return localStorage.getItem(k); } catch { return null; } }, lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } };
+    const place = () => { const m = lsGet(PK); if (!m) { nb.classList.remove('moved'); nb.style.left = nb.style.top = ''; return; } try { const { x, y } = JSON.parse(m); nb.classList.add('moved'); const w = nb.offsetWidth, h = nb.offsetHeight; nb.style.left = Math.max(0, Math.min(innerWidth - w, x)) + 'px'; nb.style.top = Math.max(0, Math.min(innerHeight - h, y)) + 'px'; } catch { /* bad value */ } };
+    const fold = f => { nb.classList.toggle('folded', f); fb.textContent = f ? '▾' : '▴'; lsSet(FK, f ? '1' : '0'); place(); };
+    fb.addEventListener('click', () => fold(!nb.classList.contains('folded')));
+    let dr = null;
+    ed.addEventListener('pointerdown', e => { e.preventDefault(); e.stopPropagation(); const r = nb.getBoundingClientRect(); dr = { id: e.pointerId, dx: e.clientX - r.left, dy: e.clientY - r.top, moved: false }; try { ed.setPointerCapture(e.pointerId); } catch { /* ok */ } });
+    ed.addEventListener('pointermove', e => { if (!dr || e.pointerId !== dr.id) return; dr.moved = true; nb.classList.add('moved'); const w = nb.offsetWidth, h = nb.offsetHeight; nb.style.left = Math.max(0, Math.min(innerWidth - w, e.clientX - dr.dx)) + 'px'; nb.style.top = Math.max(0, Math.min(innerHeight - h, e.clientY - dr.dy)) + 'px'; });
+    const end = e => { if (!dr || e.pointerId !== dr.id) return; if (dr.moved) { const r = nb.getBoundingClientRect(); lsSet(PK, JSON.stringify({ x: Math.round(r.left), y: Math.round(r.top) })); } dr = null; };
+    ed.addEventListener('pointerup', end); ed.addEventListener('pointercancel', end);
+    ed.addEventListener('dblclick', () => { try { localStorage.removeItem(PK); } catch { /* ok */ } place(); }); // double-tap the grip = back to the usual spot
+    window.addEventListener('resize', place);
+    nb.classList.toggle('folded', lsGet(FK) === '1'); fb.textContent = nb.classList.contains('folded') ? '▾' : '▴'; nb._place = place;
+  }
   $('#eadd', nb).addEventListener('click', () => { const sg = curSong(); if (sg) addPagesTo(sg); });
   $('#emvl', nb).addEventListener('click', () => movePage(-1)); $('#emvr', nb).addEventListener('click', () => movePage(1)); $('#edelp', nb).addEventListener('click', () => deletePage());
   $('#app').append(nb);
@@ -1592,7 +1607,7 @@ async function saveEditName() {
 function enterEdit() {
   logEv('เข้าโหมดแก้ไข');
   if (!curSong()) return; S.edit = true; ANN.undo = []; ANN.redo = []; clearTimeout(FS.t);
-  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; pageBtnsPaint(); dotPaint(); etbPaint(); annRender(); void 0;
+  $('#app').classList.add('reading', 'editing'); $('#etb').hidden = false; $('#enmi').value = curSong().name; $('#enm').hidden = false; $('#enm')._place?.(); pageBtnsPaint(); dotPaint(); etbPaint(); annRender(); void 0;
 }
 async function exitEdit() { logEv('ออกโหมดแก้ไข'); closeMeta(); if (CROP.editing) endCrop(false); try { await saveEditName(); } catch { /* keep going */ } $('#enm').hidden = true; $('#esz').hidden = true; S.edit = false; ANN.cur = null; $('#app').classList.remove('editing', 'reading'); $('#etb').hidden = true; annRender(); chromeArm(); }
 function toggleAnn() { ANN.show = !ANN.show; try { localStorage.setItem('sheet:ann', ANN.show ? '1' : '0'); } catch { /* private mode */ } annRender(); void 0; }

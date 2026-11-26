@@ -483,3 +483,10 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #enm #eadd{background:rgba(10,20,15,.66);color:#fff}
 #enm .enp button{font-size:.92rem}
 #enm .enp button:disabled{opacity:.35}
+
+/* edit panel: drag grip + fold button */
+#enm #edrag{flex:none;width:36px;height:48px;display:grid;place-items:center;font-size:1.3rem;color:rgba(255,255,255,.85);touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none;text-shadow:0 1px 3px rgba(0,0,0,.85)}
+#enm.moved{right:auto;transform:none}
+#enm.folded{width:auto;padding:4px 6px;gap:6px;flex-wrap:nowrap}
+#enm.folded #enmi,#enm.folded #enmx,#enm.folded .enc{display:none}
+#enm.folded:not(.moved){left:auto;right:10px;transform:none}
