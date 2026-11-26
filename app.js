@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-h';
+const BUILD = 'sheet-2026-11-26-i';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1773,7 +1773,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
 /* ───────────── licence: free trial + unlock code (signed, checked offline) + owner tools ─────────────
    The lock is OFF until the owner's public key is put in LIC.PUB. A code is signed with the owner's private key (kept only in the owner's
    browser); the app checks the signature with the public key, so codes cannot be made without that private key. */
-const LIC = { PUB: '', TRIAL_DAYS: 14, GRACE: 3, AWAY: 30 * 60000, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
+const LIC = { PUB: '', TRIAL_DAYS: 14, GRACE: 0, AWAY: 30 * 60000, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
 const b64u = {
   enc: u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
   dec: t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0)),
