@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-u';
+const BUILD = 'sheet-2026-11-26-v';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1866,12 +1866,13 @@ async function licRedeem(text) {
 const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.mode === 'grace' ? `รหัสหมดอายุแล้ว ผ่อนผันให้ใช้ต่ออีก ${st.left} วัน ต่ออายุได้ที่นี่` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
 /* the sales page: plans with the saving shown, and a button that opens LINE with the message already written */
 LIC.MONTH = 99;
-LIC.LINE = { id: '@700fggkk', oa: true }; // LINE id (with @ for an Official Account); empty = just copy the message
+LIC.LINE = { id: '@700fggkk', oa: true };
+LIC.CONTACTS = [{ label: 'LINE Official Account', value: '@700fggkk', open: 'https://line.me/R/ti/p/%40700fggkk' }]; // where a customer can send the slip when the buy button cannot open LINE // LINE id (with @ for an Official Account); empty = just copy the message
 LIC.PLANS = [
-  { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ' },
-  { d: 90, m: 3, name: '3 เดือน', price: 269 },
-  { d: 180, m: 6, name: '6 เดือน', price: 499, badge: 'ยอดนิยม' },
-  { d: 365, m: 12, name: '1 ปี', price: 899, badge: 'คุ้มที่สุด' },
+  { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ', qr: 'pay-1month.png' },
+  { d: 90, m: 3, name: '3 เดือน', price: 269, qr: 'pay-3months.png' },
+  { d: 180, m: 6, name: '6 เดือน', price: 499, badge: 'ยอดนิยม', qr: 'pay-6months.png' },
+  { d: 365, m: 12, name: '1 ปี', price: 899, badge: 'คุ้มที่สุด', qr: 'pay-1year.png' },
 ];
 const planInfo = p => { const full = LIC.MONTH * p.m, save = full - p.price, pct = Math.round(save / full * 100); return { full, save, pct, per: Math.round(p.price / p.m), day: (p.price / p.d).toFixed(1) }; };
 function plansHTML(sel) {
@@ -1893,10 +1894,22 @@ function licPage(pfx, collapsed) {
     <div class="licsec">เลือกแพ็กเกจ</div>
     ${plansHTML(2)}
     <button class="btn licline" id="${pfx}line"><span class="lcic">${chat}</span><span class="lctx"></span></button>
+    <button class="btn o licpay" id="${pfx}pay">ไม่มี LINE หรือเปิดไม่ได้? ชำระด้วย QR ในแอปนี้</button>
     <p class="lictrust">โน้ตของคุณอยู่ในเครื่องนี้ ไม่อัปโหลดขึ้นเซิร์ฟเวอร์<br>ใช้ได้ถึงวันครบกำหนด ไม่มีการต่ออายุอัตโนมัติ</p>
     <div class="licsec">ขั้นตอนการสมัคร</div>
     <ol class="licsteps"><li><span>1</span>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</li><li><span>2</span>โอนเงิน แล้วส่งสลิปมาในแชต</li><li><span>3</span>รับ <b>รหัสปลดล็อก</b> กลับมา</li><li><span>4</span>วางรหัสในช่องด้านล่าง ใช้งานต่อได้ทันที</li></ol>
     ${collapsed ? `<details class="lichave"><summary>มีรหัสแล้ว? ใส่ที่นี่</summary>${code}</details>` : `<div class="lichave"><b>มีรหัสแล้ว? ใส่ที่นี่</b>${code}</div>`}</div>`;
+}
+function payPlan(p) { // the owner's PromptPay QR with the amount in it, plus where to send the slip when LINE cannot be opened
+  const f = planInfo(p);
+  const s = sheet(`<h3>ชำระเงิน · แพ็กเกจ ${p.name}</h3>
+    <p class="sub">ยอด <b>${p.price} บาท</b> บันทึกรูป QR ด้านล่างลงเครื่อง (กดค้างที่รูป แล้วเลือก “บันทึกรูปภาพ”) จากนั้นเปิดแอปธนาคาร เลือก สแกน QR → เลือกรูปจากคลังภาพ</p>
+    <img class="payqr" src="${p.qr}" alt="QR ชำระเงิน ${p.price} บาท">
+    <div class="licsec" style="margin-top:14px">โอนแล้ว ส่งสลิปเพื่อรับรหัสปลดล็อก</div>
+    ${LIC.CONTACTS.map((c, i) => `<div class="paycon"><div><small>${esc(c.label)}</small><b>${esc(c.value)}</b></div><button class="btn o sm" data-c="${i}">คัดลอก</button>${c.open ? `<a class="btn sm" href="${c.open}" target="_blank" rel="noopener">เปิด</a>` : ''}</div>`).join('')}
+    <p class="sub" style="font-size:.82rem">ถ้ากดเปิดไม่ได้ ให้เปิดแอป LINE แล้วค้นหา ID ด้านบนเพื่อเพิ่มเพื่อน จากนั้นส่งสลิปในแชต คุณจะได้รหัสปลดล็อกกลับมา วางในแอปนี้ ช่อง “มีรหัสแล้ว? ใส่ที่นี่”</p>`);
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) copyText(LIC.CONTACTS[+b.dataset.c].value); });
+  if (document.getElementById('lic')) { s.scrim.style.zIndex = 10001; document.body.append(s.scrim); } // keep it above the lock screen
 }
 async function lineOpen(text) {
   try { await navigator.clipboard.writeText(text); } catch { /* the link below still carries the text */ }
@@ -1907,6 +1920,7 @@ function licWire(root, pfx, onOk) {
   let sel = 2; const btn = $('#' + pfx + 'line', root);
   const paintBtn = () => { const p = LIC.PLANS[sel]; btn.querySelector('.lctx').textContent = `แจ้งซื้อแพ็กเกจ ${p.name} · ${p.price} บาท ทาง LINE`; root.querySelectorAll('.plan').forEach((b, i) => b.classList.toggle('on', i === sel)); };
   root.querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.p; paintBtn(); }));
+  $('#' + pfx + 'pay', root).addEventListener('click', () => payPlan(LIC.PLANS[sel]));
   btn.addEventListener('click', () => { const p = LIC.PLANS[sel]; lineOpen(`ซื้อโน้ตเนตร ${p.name} ${p.price} บาท`); }); // short and exact: it is also the keyword the LINE OA auto-replies to
   const msg = (t, ok) => { const m = $('#' + pfx + 'm', root); m.textContent = t; m.className = 'licm' + (ok ? ' ok' : ''); };
   $('#' + pfx + 'paste', root).onclick = async () => { try { $('#' + pfx + 'c', root).value = await navigator.clipboard.readText(); } catch { msg('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก วาง'); } };

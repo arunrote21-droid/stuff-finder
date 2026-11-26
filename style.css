@@ -596,3 +596,8 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .sheet .sx{position:sticky;top:6px;float:right;z-index:6;width:38px;height:38px;margin:-4px -4px 0 8px;border-radius:50%;background:rgba(255,255,255,.12);color:var(--ink);font-size:1.05rem;line-height:1;display:grid;place-items:center;border:1px solid rgba(255,255,255,.14)}
 .sheet .sx:active{background:rgba(255,255,255,.24)}
 .ownmode{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px;margin-bottom:10px}
+.licpay{width:100%;height:50px;font-size:.95rem}
+.payqr{display:block;width:min(100%,340px);margin:10px auto 0;border-radius:18px;box-shadow:0 8px 24px rgba(0,0,0,.4);-webkit-touch-callout:default;user-select:auto}
+.paycon{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;margin:6px 0}
+.paycon>div{flex:1;min-width:0}.paycon small{display:block;color:var(--mut);font-size:.78rem}.paycon b{font-size:1.15rem;letter-spacing:.3px;font-weight:600}
+.paycon a.btn{text-decoration:none;display:grid;place-items:center}
