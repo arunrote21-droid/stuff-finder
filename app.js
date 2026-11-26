@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-o';
+const BUILD = 'sheet-2026-11-26-p';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1783,7 +1783,10 @@ $('#strip').insertAdjacentHTML('afterbegin', '<div class="rmzone">ลากข�
 // keep the whole app inside the visible area when the on-screen keyboard is open
 (() => {
   const vv = window.visualViewport, app = $('#app'); if (!vv) return;
-  const fit = () => { app.style.height = vv.height + 'px'; app.style.transform = `translateY(${vv.offsetTop}px)`; window.scrollTo(0, 0); };
+  const root = document.documentElement.style;
+  const fit = () => { app.style.height = vv.height + 'px'; app.style.transform = `translateY(${vv.offsetTop}px)`; root.setProperty('--vvh', vv.height + 'px'); root.setProperty('--vvt', vv.offsetTop + 'px'); window.scrollTo(0, 0); };
+  // a field inside a sheet that the keyboard would cover is scrolled into view
+  document.addEventListener('focusin', e => { if (e.target.closest?.('.sheet')) setTimeout(() => { try { e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }); } catch { /* old browser */ } }, 350); });
   vv.addEventListener('resize', fit); vv.addEventListener('scroll', fit); fit();
 })();
 // keep the screen awake while playing
