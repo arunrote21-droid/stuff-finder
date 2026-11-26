@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-zc';
+const BUILD = 'sheet-2026-11-26-zd';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1898,10 +1898,11 @@ function licPage(pfx, collapsed) {
     ${plansHTML(2)}
     <button class="btn licline" id="${pfx}line"><span class="lcic">${chat}</span><span class="lctx"></span></button>
     <button class="btn o licpay" id="${pfx}pay">ไม่มี LINE หรือเปิดไม่ได้? ชำระด้วย QR ในแอปนี้</button>
+    <button class="lichop" id="${pfx}jump" type="button">มีรหัสแล้ว? <u>ไปที่ช่องใส่รหัส ↓</u></button>
     <p class="lictrust">โน้ตของคุณอยู่ในเครื่องนี้ ไม่อัปโหลดขึ้นเซิร์ฟเวอร์<br>ใช้ได้ถึงวันครบกำหนด ไม่มีการต่ออายุอัตโนมัติ</p>
     <div class="licsec">ขั้นตอนการสมัคร</div>
     <ol class="licsteps"><li><span>1</span>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</li><li><span>2</span>โอนเงิน แล้วส่งสลิปมาในแชต</li><li><span>3</span>รับ <b>รหัสปลดล็อก</b> กลับมา</li><li><span>4</span>วางรหัสในช่องด้านล่าง ใช้งานต่อได้ทันที</li></ol>
-    ${collapsed ? `<details class="lichave"><summary>มีรหัสแล้ว? ใส่ที่นี่</summary>${code}</details>` : `<div class="lichave"><b>มีรหัสแล้ว? ใส่ที่นี่</b>${code}</div>`}</div>`;
+    <div class="lichave" id="${pfx}have"><div class="lhh"><span class="lhk"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M7 14a4 4 0 1 1 3.9-4.9H22v3h-2v2.5h-3V12h-2.1A4 4 0 0 1 7 14zm0-5.5a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3z" fill="currentColor"/></svg></span><div><b>ได้รับรหัสแล้ว? วางรหัสที่นี่</b><small>รหัสเป็นข้อความยาว ๆ ที่ได้ในแชต คัดลอกมา แล้วกด “วางรหัส”</small></div></div>${code}</div>`;
 }
 function payPlan(p) { // the owner's PromptPay QR with the amount in it, plus where to send the slip when LINE cannot be opened
   const f = planInfo(p);
@@ -1925,6 +1926,7 @@ function licWire(root, pfx, onOk) {
   root.querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.p; paintBtn(); }));
   $('#' + pfx + 'pay', root).addEventListener('click', () => payPlan(LIC.PLANS[sel]));
   btn.addEventListener('click', () => { const p = LIC.PLANS[sel]; lineOpen(`ซื้อโน้ตเนตร ${p.name} ${p.price} บาท`); }); // short and exact: it is also the keyword the LINE OA auto-replies to
+  $('#' + pfx + 'jump', root).onclick = () => { const h = $('#' + pfx + 'have', root); h.scrollIntoView({ behavior: 'smooth', block: 'center' }); h.classList.remove('pulse'); void h.offsetWidth; h.classList.add('pulse'); };
   const msg = (t, ok) => { const m = $('#' + pfx + 'm', root); m.textContent = t; m.className = 'licm' + (ok ? ' ok' : ''); };
   $('#' + pfx + 'paste', root).onclick = async () => { try { $('#' + pfx + 'c', root).value = await navigator.clipboard.readText(); } catch { msg('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก วาง'); } };
   $('#' + pfx + 'go', root).onclick = async () => { const r = await licRedeem($('#' + pfx + 'c', root).value); if (!r.ok) { msg(r.msg); return; } msg(r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); onOk?.(); };

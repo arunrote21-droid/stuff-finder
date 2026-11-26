@@ -601,3 +601,16 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .paycon{display:flex;align-items:center;gap:8px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:10px 12px;margin:6px 0}
 .paycon>div{flex:1;min-width:0}.paycon small{display:block;color:var(--mut);font-size:.78rem}.paycon b{font-size:1.15rem;letter-spacing:.3px;font-weight:600}
 .paycon a.btn{text-decoration:none;display:grid;place-items:center}
+
+/* the "I have a code" box: clearly the place to paste */
+.lichave{border:1.5px solid var(--ac);border-radius:18px;padding:14px;margin-top:10px;gap:10px;background:linear-gradient(180deg,rgba(52,211,153,.14),rgba(52,211,153,.05));box-shadow:0 0 0 4px rgba(52,211,153,.08)}
+.lichave .lhh{display:flex;gap:12px;align-items:center}
+.lichave .lhk{flex:none;width:42px;height:42px;border-radius:12px;background:var(--ac);color:#04251a;display:grid;place-items:center}
+.lichave .lhh b{display:block;font-size:1.05rem;color:var(--ink)}
+.lichave .lhh small{display:block;color:var(--mut);font-size:.8rem;margin-top:2px;line-height:1.35}
+#lic .lichave textarea,.lichave textarea{border:2px dashed var(--ac);background:rgba(0,0,0,.28);min-height:84px}
+#lic .lichave textarea:focus,.lichave textarea:focus{outline:none;border-style:solid;box-shadow:0 0 0 3px rgba(52,211,153,.25)}
+.lichave .licrow{display:flex;gap:8px}.lichave .licrow .btn{flex:1;height:50px}.lichave #licgo,.lichave #lcgo{flex:1.4;font-size:1.05rem}
+.lichave.pulse{animation:lhp 1.4s ease-out 1}
+@keyframes lhp{0%{box-shadow:0 0 0 0 rgba(52,211,153,.7)}100%{box-shadow:0 0 0 22px rgba(52,211,153,0)}}
+.lichop{background:none;border:0;color:var(--mut);font:inherit;font-size:.86rem;padding:4px;cursor:pointer;text-align:center}.lichop u{color:var(--ac);text-underline-offset:3px}
