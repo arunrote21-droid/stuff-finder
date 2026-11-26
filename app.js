@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-w';
+const BUILD = 'sheet-2026-11-26-x';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1868,8 +1868,8 @@ const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้�
 LIC.MONTH = 99;
 LIC.LINE = { id: '@700fggkk', oa: true };
 LIC.CONTACTS = [
-  { label: 'LINE Official Account', value: '@700fggkk', open: 'https://line.me/R/ti/p/%40700fggkk' },
-  { label: 'Facebook เพจ · กด “ส่งข้อความ” เพื่อส่งสลิป', value: 'โน้ตเนตร', open: 'https://www.facebook.com/share/1BCz1P7CxT/', copy: 'https://www.facebook.com/share/1BCz1P7CxT/' },
+  { label: 'LINE Official Account', value: '@700fggkk', open: 'https://line.me/R/ti/p/%40700fggkk', btn: 'เปิด LINE', color: '#06c755' },
+  { label: 'Facebook เพจ · กด “ส่งข้อความ” เพื่อส่งสลิป', value: 'โน้ตเนตร', open: 'https://www.facebook.com/share/1BCz1P7CxT/', copy: 'https://www.facebook.com/share/1BCz1P7CxT/', btn: 'ส่งเข้าเพจ', color: '#1877f2' },
 ]; // where a customer can send the slip when the buy button cannot open LINE // LINE id (with @ for an Official Account); empty = just copy the message
 LIC.PLANS = [
   { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ', qr: 'pay-1month.png' },
@@ -1909,7 +1909,7 @@ function payPlan(p) { // the owner's PromptPay QR with the amount in it, plus wh
     <p class="sub">ยอด <b>${p.price} บาท</b> บันทึกรูป QR ด้านล่างลงเครื่อง (กดค้างที่รูป แล้วเลือก “บันทึกรูปภาพ”) จากนั้นเปิดแอปธนาคาร เลือก สแกน QR → เลือกรูปจากคลังภาพ</p>
     <img class="payqr" src="${p.qr}" alt="QR ชำระเงิน ${p.price} บาท">
     <div class="licsec" style="margin-top:14px">โอนแล้ว ส่งสลิปเพื่อรับรหัสปลดล็อก</div>
-    ${LIC.CONTACTS.map((c, i) => `<div class="paycon"><div><small>${esc(c.label)}</small><b>${esc(c.value)}</b></div><button class="btn o sm" data-c="${i}">คัดลอก</button>${c.open ? `<a class="btn sm" href="${c.open}" target="_blank" rel="noopener">เปิด</a>` : ''}</div>`).join('')}
+    ${LIC.CONTACTS.map((c, i) => `<div class="paycon"><div><small>${esc(c.label)}</small><b>${esc(c.value)}</b></div><button class="btn o sm" data-c="${i}">คัดลอก</button>${c.open ? `<a class="btn sm" href="${c.open}" target="_blank" rel="noopener" style="${c.color ? `background:${c.color};color:#fff` : ''}">${esc(c.btn || 'เปิด')}</a>` : ''}</div>`).join('')}
     <p class="sub" style="font-size:.82rem">เลือกช่องทางที่สะดวก ส่งรูปสลิปมาในแชต คุณจะได้รหัสปลดล็อกกลับมา วางในแอปนี้ ช่อง “มีรหัสแล้ว? ใส่ที่นี่” (ถ้า LINE เปิดไม่ได้ ให้เปิดแอป LINE แล้วค้นหา ID ด้านบนเพื่อเพิ่มเพื่อนเอง)</p>`);
   s.el.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) { const c = LIC.CONTACTS[+b.dataset.c]; copyText(c.copy || c.value); } });
   if (document.getElementById('lic')) { s.scrim.style.zIndex = 10001; document.body.append(s.scrim); } // keep it above the lock screen
