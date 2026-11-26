@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-f';
+const BUILD = 'sheet-2026-11-26-g';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1823,7 +1823,7 @@ LIC.PLANS = [
 const planInfo = p => { const full = LIC.MONTH * p.m, save = full - p.price, pct = Math.round(save / full * 100); return { full, save, pct, per: Math.round(p.price / p.m), day: (p.price / p.d).toFixed(1) }; };
 function plansHTML(sel) {
   return `<div class="plans">${LIC.PLANS.map((p, i) => { const f = planInfo(p);
-    return `<button class="plan${i === sel ? ' on' : ''}${p.badge ? ' hot' : ''}" data-p="${i}">${p.badge ? `<span class="bdg">${p.badge}</span>` : ''}
+    return `<button class="plan${i === sel ? ' on' : ''}${p.badge ? ' hot' : ''}" data-p="${i}"><span class="rd"></span>${p.badge ? `<span class="bdg">${p.badge}</span>` : ''}
       <div class="pl"><b>${p.name}</b>${f.pct ? `<span class="sv">ประหยัด ${f.pct}%</span>` : `<span class="tg">${p.tag || ''}</span>`}</div>
       <div class="pr">${f.pct ? `<s>${f.full}</s>` : ''}<strong>${p.price}</strong><em>บาท</em></div>
       <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>${f.per} บาท/เดือน</b>${p.m === 12 ? ` · ตกวันละ ${f.day} บาท` : ''}` : `เดือนละ ${f.per} บาท เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
@@ -1831,15 +1831,23 @@ function plansHTML(sel) {
 function licPage(pfx, collapsed) {
   const code = `<textarea id="${pfx}c" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="${pfx}m" class="licm"></div>
     <div class="licrow"><button class="btn o" id="${pfx}paste">วางรหัส</button><button class="btn" id="${pfx}go">ใส่รหัส</button></div>`;
-  return `<div class="licpitch"><div class="licben"><span>✓ เปิดโน้ตได้ไม่จำกัด ปัดเปลี่ยนหน้าลื่นกลางเวที</span><span>✓ ชุดเพลง คิว และเขียนโน้ตบน iPad ได้เต็มที่</span><span>✓ โน้ตอยู่ในเครื่องคุณ ไม่ต้องต่อเน็ตก็เล่นได้</span></div>
+  const tick = '<i class="tk"><svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8.5l3.2 3L13 4.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></i>';
+  const chat = '<svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M12 3C6.5 3 2 6.6 2 11c0 2.6 1.6 4.9 4 6.3-.1.9-.5 2.3-1.4 3.2 0 0 2.6-.2 4.3-1.5.9.2 1.9.3 3.1.3 5.5 0 10-3.6 10-8.3S17.5 3 12 3z" fill="currentColor"/></svg>';
+  return `<div class="licpitch"><div class="licben">
+      <div>${tick}<span><b>เปิดเพลงต่อไปได้ทันที</b> โดยไม่ต้องปิดเพลงที่กำลังเล่นอยู่</span></div>
+      <div>${tick}<span><b>วางรายชื่อเพลงยาว ๆ</b> แอปเรียงลำดับให้เอง ไม่ต้องเปิดทีละเพลง</span></div>
+      <div>${tick}<span><b>ปัดเปลี่ยนหน้าและเพลงลื่นกลางเวที</b> ใช้ได้โดยไม่ต้องต่อเน็ต</span></div></div>
+    <div class="licsec">เลือกแพ็กเกจ</div>
     ${plansHTML(2)}
-    <button class="btn licline" id="${pfx}line"></button>
-    <ol class="licsteps"><li>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE”</li><li>รับ QR โอนเงินจากผู้พัฒนาในแชต</li><li>ส่งสลิป รับ <b>รหัสปลดล็อก</b> กลับมา</li><li>วางรหัสในช่องด้านล่าง ใช้ต่อได้ทันที</li></ol>
+    <button class="btn licline" id="${pfx}line"><span class="lcic">${chat}</span><span class="lctx"></span></button>
+    <p class="lictrust">โน้ตของคุณอยู่ในเครื่องนี้ ไม่อัปโหลดขึ้นเซิร์ฟเวอร์<br>ใช้ได้ถึงวันครบกำหนด ไม่มีการต่ออายุอัตโนมัติ</p>
+    <div class="licsec">ขั้นตอนการสมัคร</div>
+    <ol class="licsteps"><li><span>1</span>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE”</li><li><span>2</span>รับ QR โอนเงินจากผู้พัฒนาในแชต</li><li><span>3</span>ส่งสลิป แล้วรับ <b>รหัสปลดล็อก</b> กลับมา</li><li><span>4</span>วางรหัสในช่องด้านล่าง ใช้งานต่อได้ทันที</li></ol>
     ${collapsed ? `<details class="lichave"><summary>มีรหัสแล้ว? ใส่ที่นี่</summary>${code}</details>` : `<div class="lichave"><b>มีรหัสแล้ว? ใส่ที่นี่</b>${code}</div>`}</div>`;
 }
 function licWire(root, pfx, onOk) {
   let sel = 2; const btn = $('#' + pfx + 'line', root);
-  const paintBtn = () => { const p = LIC.PLANS[sel]; btn.textContent = `แจ้งซื้อแพ็กเกจ ${p.name} · ${p.price} บาท ทาง LINE`; root.querySelectorAll('.plan').forEach((b, i) => b.classList.toggle('on', i === sel)); };
+  const paintBtn = () => { const p = LIC.PLANS[sel]; btn.querySelector('.lctx').textContent = `แจ้งซื้อแพ็กเกจ ${p.name} · ${p.price} บาท ทาง LINE`; root.querySelectorAll('.plan').forEach((b, i) => b.classList.toggle('on', i === sel)); };
   root.querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.p; paintBtn(); }));
   btn.addEventListener('click', async () => {
     const p = LIC.PLANS[sel], text = `สวัสดีครับ ขอซื้อโน้ตเนตร แพ็กเกจ ${p.name} ราคา ${p.price} บาท`;
@@ -1857,7 +1865,7 @@ function licCheck() {
   if (st.mode !== 'locked') { old?.remove(); return; }
   if (old) return;
   const el = document.createElement('div'); el.id = 'lic';
-  el.innerHTML = `<div class="licbox"><h2>${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว'}</h2><p class="licsub">โน้ตทั้งหมดของคุณยังอยู่ครบในเครื่องนี้ เลือกแพ็กเกจแล้วเล่นต่อได้ทันที</p>${licPage('lic', false)}</div>`;
+  el.innerHTML = `<div class="licbox"><div class="licbrand"><img src="apple-touch-icon.png" alt="" width="60" height="60"><div><b>โน้ตเนตร</b><span>โน้ตเพลงบนเวที เปิดเร็ว เล่นลื่น</span></div></div>\n    <span class="licchip">${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'สิ้นสุดช่วงทดลองใช้'}</span><h2>เล่นต่อได้ทันที เลือกแพ็กเกจที่เหมาะกับคุณ</h2><p class="licsub">โน้ตทั้งหมดของคุณยังอยู่ครบในเครื่องนี้ ไม่มีอะไรหาย</p>${licPage('lic', false)}</div>`;
   document.body.append(el); licWire(el, 'lic', () => setTimeout(licCheck, 900));
 }
 function openLicence() {
