@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-j';
+const BUILD = 'sheet-2026-11-26-k';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1821,7 +1821,7 @@ async function licRedeem(text) {
 const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.mode === 'grace' ? `รหัสหมดอายุแล้ว ผ่อนผันให้ใช้ต่ออีก ${st.left} วัน ต่ออายุได้ที่นี่` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
 /* the sales page: plans with the saving shown, and a button that opens LINE with the message already written */
 LIC.MONTH = 99;
-LIC.LINE = { id: '', oa: true }; // LINE id (with @ for an Official Account); empty = just copy the message
+LIC.LINE = { id: '@700fggkk', oa: true }; // LINE id (with @ for an Official Account); empty = just copy the message
 LIC.PLANS = [
   { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ' },
   { d: 90, m: 3, name: '3 เดือน', price: 269 },
