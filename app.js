@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-zb';
+const BUILD = 'sheet-2026-11-26-zc';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1877,13 +1877,13 @@ LIC.PLANS = [
   { d: 180, m: 6, name: '180 วัน', price: 799, badge: 'ยอดนิยม', qr: 'pay-6months.png' },
   { d: 365, m: 12, name: '365 วัน', price: 1449, badge: 'คุ้มที่สุด', qr: 'pay-1year.png' },
 ];
-const planInfo = p => { const full = LIC.MONTH * p.m, save = full - p.price, pct = Math.round(save / full * 100); return { full, save, pct, per: Math.round(p.price / p.m), day: (p.price / p.d).toFixed(1) }; };
+const planInfo = p => { const full = LIC.MONTH * p.m, save = full - p.price, pct = Math.round(save / full * 100); return { full, save, pct, per: Math.round(p.price / p.m), mo: Math.round(p.price / p.d * 30), day: (p.price / p.d).toFixed(1) }; };
 function plansHTML(sel) {
   return `<div class="plans">${LIC.PLANS.map((p, i) => { const f = planInfo(p);
     return `<button class="plan${i === sel ? ' on' : ''}${p.badge ? ' hot' : ''}" data-p="${i}"><span class="rd"></span>${p.badge ? `<span class="bdg">${p.badge}</span>` : ''}
       <div class="pl"><b>${p.name}</b>${f.pct ? `<span class="sv">ประหยัด ${f.pct}%</span>` : `<span class="tg">${p.tag || ''}</span>`}</div>
       <div class="pr">${f.pct ? `<s>${f.full}</s>` : ''}<strong>${p.price}</strong><em>บาท</em></div>
-      <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>วันละ ${f.day} บาท</b>` : `วันละ ${f.day} บาท · เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
+      <div class="pm">${f.pct ? `เฉลี่ยเดือนละ <b>${f.mo} บาท</b> · วันละ ${f.day} บาท` : `เดือนละ <b>${f.mo} บาท</b> · วันละ ${f.day} บาท`}</div></button>`; }).join('')}</div>`;
 }
 function licPage(pfx, collapsed) {
   const code = `<textarea id="${pfx}c" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="${pfx}m" class="licm"></div>
