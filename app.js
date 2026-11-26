@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-g';
+const BUILD = 'sheet-2026-11-26-h';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -677,7 +677,7 @@ async function runImport(s, st) {
 function openMenu() {
   const ls = licStatus();
   const s = sheet(`<h3>เมนู</h3><div class="menu">
-    ${ls.mode === 'off' ? '' : `<button data-m="lic" class="licrowm ${(ls.mode === 'trial' || ls.mode === 'paid') && ls.left <= 7 ? 'warn' : ''}"><span class="ic">★</span><span>สถานะการใช้งาน<small>${esc(licLeftText(ls))}</small></span></button>`}
+    ${ls.mode === 'off' ? '' : `<button data-m="lic" class="licrowm ${ls.mode === 'grace' || ((ls.mode === 'trial' || ls.mode === 'paid') && ls.left <= 7) ? 'warn' : ''}"><span class="ic">★</span><span>สถานะการใช้งาน<small>${esc(licLeftText(ls))}</small></span></button>`}
     <button data-m="import"><span class="ic">⤓</span><span>นำเข้าโน้ต<small>ZIP หรือรูปจากแอปไฟล์ / iCloud</small></span></button>
     <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
@@ -1008,17 +1008,17 @@ function askPin(title, sub) {
     });
   });
 }
-async function verifyPin(why) { // true when the right code was typed (the first time ever it asks you to choose one)
+async function verifyPin(why, title) { // true when the right code was typed (the first time ever it asks you to choose one)
   const saved = pinGet();
   if (!saved) {
-    const a = await askPin('ตั้งรหัส 4 หลัก', 'ใช้ปลดล็อกชุดเพลงที่ล็อกไว้ (จำไว้ให้ดี)'); if (!a) return false;
+    const a = await askPin('ตั้งรหัส 4 หลัก', 'ใช้เข้าเมนูเจ้าของและปลดล็อกชุดเพลง (จำไว้ให้ดี)'); if (!a) return false;
     const b = await askPin('ใส่รหัสอีกครั้ง', 'ยืนยันรหัสที่ตั้ง'); if (!b) return false;
     if (a !== b) { toast('รหัสสองครั้งไม่ตรงกัน ลองใหม่'); return false; }
     try { localStorage.setItem(PINKEY, await pinHash(a)); } catch { toast('บันทึกรหัสไม่สำเร็จ'); return false; }
     return true;
   }
   let sub = why || 'ใส่รหัส 4 หลัก';
-  for (;;) { const p = await askPin('ชุดนี้ล็อกอยู่', sub); if (!p) return false; if (await pinHash(p) === saved) return true; sub = 'รหัสไม่ถูก ลองอีกครั้ง'; try { navigator.vibrate?.(60); } catch { /* ok */ } }
+  for (;;) { const p = await askPin(title || 'ชุดนี้ล็อกอยู่', sub); if (!p) return false; if (await pinHash(p) === saved) return true; sub = 'รหัสไม่ถูก ลองอีกครั้ง'; try { navigator.vibrate?.(60); } catch { /* ok */ } }
 }
 const guardSet = async x => !x || !x.locked || verifyPin(`ใส่รหัสเพื่อลบชุด “${x.name}”`);
 async function toggleLock(x) {
@@ -1253,7 +1253,7 @@ async function openInfo() {
   let pers = false; try { pers = await navigator.storage.persisted(); } catch { /* unsupported */ }
   const pages = [...S.songs.values()].reduce((a, x) => a + x.n, 0);
   const s = sheet(`<h3 id="infoT">ข้อมูลและพื้นที่</h3><div class="help">เพลง ${S.songs.size} เพลง · ${pages} หน้า · ชุดเล่น ${S.sets.length} ชุด<br>${est}<br>ระบบ${pers ? '' : 'ยังไม่'}รับปากว่าจะไม่ล้างข้อมูลเอง${pers ? '' : ' (แนะนำสำรองไฟล์ไว้ และเปิดแอปจากไอคอนหน้าจอหลัก)'}<br><small>เวอร์ชัน ${BUILD}</small></div><h4 style="margin:12px 0 6px">บันทึกการทำงานล่าสุด</h4><p class="sub">ครั้งก่อนปิดแอป: ${LOG.prevClean ? 'ปกติ' : '<b style="color:var(--warn)">ไม่ปกติ (ค้างหรือถูกระบบปิด)</b>'}</p><pre class="rtlog" id="logbox" style="max-height:200px;overflow:auto;font-size:.72rem;white-space:pre-wrap">${esc([...LOG.prev.slice(-12), '--- เปิดแอปครั้งนี้ ---', ...LOG.a.slice(-12)].join('\n'))}</pre><div class="row2"><button class="btn o sm" id="logcopy">คัดลอกบันทึก</button></div><div class="row2"><button class="btn bad" data-w="1">ลบทุกอย่างในแอปนี้</button></div>`);
-  { let taps = 0, tt = 0; $('#infoT', s.el).addEventListener('click', () => { taps++; clearTimeout(tt); tt = setTimeout(() => { taps = 0; }, 2500); if (taps >= 7) { taps = 0; s.close(); openOwner(); } }); }
+  { let taps = 0, tt = 0; $('#infoT', s.el).addEventListener('click', () => { taps++; clearTimeout(tt); tt = setTimeout(() => { taps = 0; }, 2500); if (taps >= 7) { taps = 0; s.close(); verifyPin('ใส่รหัส 4 หลักเพื่อเข้าเมนูเจ้าของ', 'เมนูเจ้าของ').then(ok => { if (ok) openOwner(); }); } }); }
   $('#logcopy', s.el).onclick = async () => { const t = $('#logbox', s.el).textContent; try { await navigator.clipboard.writeText(t); void 0; } catch { toast('คัดลอกไม่ได้ ถ่ายภาพหน้าจอแทนได้'); } };
   s.el.addEventListener('click', async e => { if (!e.target.closest('[data-w]')) return;
     if (!(await confirmDel('ลบเพลงทั้งหมด?', 'รูปโน้ต ชุดเล่น และคิวในเครื่องนี้จะหายหมด (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)', 'ลบทั้งหมด'))) return;
@@ -1773,7 +1773,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
 /* ───────────── licence: free trial + unlock code (signed, checked offline) + owner tools ─────────────
    The lock is OFF until the owner's public key is put in LIC.PUB. A code is signed with the owner's private key (kept only in the owner's
    browser); the app checks the signature with the public key, so codes cannot be made without that private key. */
-const LIC = { PUB: '', TRIAL_DAYS: 14, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
+const LIC = { PUB: '', TRIAL_DAYS: 14, GRACE: 3, AWAY: 30 * 60000, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
 const b64u = {
   enc: u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
   dec: t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0)),
@@ -1783,13 +1783,21 @@ const dayStr = n => new Date(Date.UTC(2020, 0, 1) + n * 86400000).toLocaleDateSt
 const licGet = () => { try { return JSON.parse(localStorage.getItem(LIC.K) || '{}'); } catch { return {}; } };
 const licPut = o => { try { localStorage.setItem(LIC.K, JSON.stringify(o)); } catch { /* storage blocked */ } };
 const licPub = () => LIC.PUB || (location.hostname === 'localhost' ? (window.__licTestPub || '') : '');
-const isOwner = () => { try { return !!localStorage.getItem(LIC.OWNER); } catch { return false; } };
+let ownerOK = false; const isOwner = () => ownerOK;
+async function ownerCheck() { // the owner device must hold the private key that really matches LIC.PUB (a public key alone proves nothing)
+  ownerOK = false; const o = ownerGet(), pub = licPub(); if (!o || !pub) return;
+  try {
+    const priv = await crypto.subtle.importKey('jwk', o.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']), pk = await crypto.subtle.importKey('raw', b64u.dec(pub), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    const ch = crypto.getRandomValues(new Uint8Array(16)), sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, ch);
+    ownerOK = await crypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, pk, sig, ch);
+  } catch { ownerOK = false; }
+}
 function licToday() { const st = licGet(), t = dayNum(), m = Math.max(st.seen || 0, t); if (m !== st.seen) { st.seen = m; licPut(st); } return m; } // winding the clock back does not give days back
 function licStatus() {
   if (!licPub()) return { mode: 'off' };
   if (isOwner()) return { mode: 'owner' };
   const st = licGet(), today = licToday();
-  if (st.exp != null) return today <= st.exp ? { mode: 'paid', left: st.exp - today + 1, exp: st.exp } : { mode: 'locked', why: 'expired', exp: st.exp };
+  if (st.exp != null) { if (today <= st.exp) return { mode: 'paid', left: st.exp - today + 1, exp: st.exp }; if (today <= st.exp + LIC.GRACE) return { mode: 'grace', left: st.exp + LIC.GRACE - today + 1, exp: st.exp }; return { mode: 'locked', why: 'expired', exp: st.exp }; }
   if (st.start == null) { st.start = today; licPut(st); }
   const left = st.start + LIC.TRIAL_DAYS - today;
   return left > 0 ? { mode: 'trial', left } : { mode: 'locked', why: 'trial' };
@@ -1810,7 +1818,7 @@ async function licRedeem(text) {
   st.exp = base + dur; st.ids.push(id); licPut(st);
   return { ok: true, exp: st.exp, days: dur };
 }
-const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
+const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.mode === 'grace' ? `รหัสหมดอายุแล้ว ผ่อนผันให้ใช้ต่ออีก ${st.left} วัน ต่ออายุได้ที่นี่` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
 /* the sales page: plans with the saving shown, and a button that opens LINE with the message already written */
 LIC.MONTH = 99;
 LIC.LINE = { id: '', oa: true }; // LINE id (with @ for an Official Account); empty = just copy the message
@@ -1860,13 +1868,13 @@ function licWire(root, pfx, onOk) {
   $('#' + pfx + 'go', root).onclick = async () => { const r = await licRedeem($('#' + pfx + 'c', root).value); if (!r.ok) { msg(r.msg); return; } msg(r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); onOk?.(); };
   paintBtn();
 }
-function licCheck() {
+function licCheck(allowLock) { // allowLock: only when the app is opened or comes back after a long time away, never in the middle of playing
   const st = licStatus(), old = document.getElementById('lic');
   if (st.mode !== 'locked') { old?.remove(); return; }
-  if (old) return;
+  if (old || !allowLock) return;
   const el = document.createElement('div'); el.id = 'lic';
   el.innerHTML = `<div class="licbox"><div class="licbrand"><img src="apple-touch-icon.png" alt="" width="60" height="60"><div><b>โน้ตเนตร</b><span>โน้ตเพลงบนเวที เปิดเร็ว เล่นลื่น</span></div></div>\n    <span class="licchip">${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'สิ้นสุดช่วงทดลองใช้'}</span><h2>เล่นต่อได้ทันที เลือกแพ็กเกจที่เหมาะกับคุณ</h2><p class="licsub">โน้ตทั้งหมดของคุณยังอยู่ครบในเครื่องนี้ ไม่มีอะไรหาย</p>${licPage('lic', false)}</div>`;
-  document.body.append(el); licWire(el, 'lic', () => setTimeout(licCheck, 900));
+  document.body.append(el); licWire(el, 'lic', () => setTimeout(() => licCheck(true), 900));
 }
 function openLicence() {
   const st = licStatus();
@@ -1874,13 +1882,13 @@ function openLicence() {
   if (st.mode !== 'owner') licWire(s.el, 'lc');
 }
 /* owner tools: reached by tapping the title of "ข้อมูลและพื้นที่" seven times */
-const ownerGet = () => { try { return JSON.parse(localStorage.getItem(LIC.OWNER) || 'null'); } catch { return null; } };
+function ownerGet() { try { return JSON.parse(localStorage.getItem(LIC.OWNER) || 'null'); } catch { return null; } }
 async function ownerCreate() {
   const kp = await licSubtle().generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
   const priv = await licSubtle().exportKey('jwk', kp.privateKey), pub = b64u.enc(new Uint8Array(await licSubtle().exportKey('raw', kp.publicKey)));
   localStorage.setItem(LIC.OWNER, JSON.stringify({ priv, pub })); return pub;
 }
-async function ownerIssue(days, note, redeemDays = 30) {
+async function ownerIssue(days, note, redeemDays = 90) {
   const o = ownerGet(); if (!o) throw new Error('ยังไม่ได้ตั้งเครื่องเจ้าของ');
   const key = await licSubtle().importKey('jwk', o.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
   const by = dayNum() + redeemDays, p = new Uint8Array(8); p[0] = 1; p[1] = by & 255; p[2] = (by >> 8) & 255; p[3] = days & 255; p[4] = (days >> 8) & 255; p.set(crypto.getRandomValues(new Uint8Array(3)), 5);
@@ -1913,11 +1921,11 @@ function openOwner() {
     const d = e.target.closest('#ownDur [data-d]'); if (d) { dur = +d.dataset.d; s.el.querySelectorAll('#ownDur [data-d]').forEach(b => b.classList.toggle('on', b === d)); return; }
     const a = e.target.closest('[data-o]')?.dataset.o; if (!a) return;
     try {
-      if (a === 'make') { if (await confirmDel('ตั้งเป็นเครื่องเจ้าของ?', 'เครื่องนี้จะใช้ฟรีตลอดและออกรหัสได้ อย่าลืมคัดลอกกุญแจสำรองเก็บไว้ (ล้างข้อมูลเว็บแล้วกุญแจจะหาย)', 'ตั้งเลย')) { await ownerCreate(); paint(); licCheck(); } }
-      else if (a === 'imp') { const t = $('#ownImp', s.el).value.trim(); const o = JSON.parse(t); if (!o.priv || !o.pub) throw new Error('x'); localStorage.setItem(LIC.OWNER, JSON.stringify(o)); paint(); licCheck(); }
+      if (a === 'make') { if (await confirmDel('ตั้งเป็นเครื่องเจ้าของ?', 'เครื่องนี้จะใช้ฟรีตลอดและออกรหัสได้ อย่าลืมคัดลอกกุญแจสำรองเก็บไว้ (ล้างข้อมูลเว็บแล้วกุญแจจะหาย)', 'ตั้งเลย')) { await ownerCreate(); paint(); await ownerCheck(); licCheck(true); } }
+      else if (a === 'imp') { const t = $('#ownImp', s.el).value.trim(); const o = JSON.parse(t); if (!o.priv || !o.pub) throw new Error('x'); localStorage.setItem(LIC.OWNER, JSON.stringify(o)); await ownerCheck(); paint(); licCheck(true); }
       else if (a === 'cpub') copyText(ownerGet().pub);
       else if (a === 'bak') copyText(JSON.stringify(ownerGet()));
-      else if (a === 'issue') { const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim()); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (ส่งให้ผู้ใช้ รหัสนี้ต้องใส่ภายใน 30 วัน):</p><textarea class="field" readonly rows="4" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกรหัส</button>`; }
+      else if (a === 'issue') { const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim()); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (ส่งให้ผู้ใช้ รหัสนี้ต้องใส่ภายใน 90 วัน):</p><textarea class="field" readonly rows="4" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกรหัส</button>`; }
       else if (a === 'ccode') copyText($('#ownCode', s.el).value);
       else if (a === 'cp') { let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ } copyText(list[+e.target.closest('[data-i]').dataset.i].code); }
     } catch (err) { toast('ทำไม่สำเร็จ: ' + (err.message || err)); }
@@ -1940,7 +1948,7 @@ function openOwner() {
     dd.addEventListener('click', e => { e.stopPropagation(); const song = curSong(); if (!song) return; if (DOT.off.has(song.id)) DOT.off.delete(song.id); else DOT.off.add(song.id); dotPaint(); }); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
-  applyTop(); loadState(); renderAll(); chromeArm(); licCheck(); setInterval(licCheck, 300000); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') licCheck(); });
+  applyTop(); loadState(); renderAll(); chromeArm(); ownerCheck().then(() => licCheck(true)); { let away = 0; document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') away = Date.now(); else if (away && Date.now() - away > LIC.AWAY) { away = 0; licCheck(true); } else licCheck(false); }); }
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   window.__sheet = { S, DB, CROP, inkBox, ANN, lic: { ownerCreate, ownerIssue, licStatus, licRedeem, dayNum } };
 })();
