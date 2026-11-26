@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-r';
+const BUILD = 'sheet-2026-11-26-s';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1842,16 +1842,22 @@ const licSubtle = () => crypto.subtle;
 async function licRedeem(text) {
   const bad = msg => ({ ok: false, msg: msg || 'รหัสไม่ถูกต้อง ตรวจว่าคัดลอกมาครบทั้งหมด' });
   let bytes; try { bytes = b64u.dec(String(text).replace(/\s+/g, '')); } catch { return bad(); }
-  const kind = bytes[0], plen = kind === 1 ? 8 : kind === 2 ? 13 : 0;
+  const kind = bytes[0], plen = (kind === 1 || kind === 3) ? 8 : (kind === 2 || kind === 4) ? 13 : 0;
   if (!plen || bytes.length !== plen + 64) return bad();
   const payload = bytes.slice(0, plen), sig = bytes.slice(plen); let good = false;
   try { const key = await licSubtle().importKey('raw', b64u.dec(licPub()), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']); good = await licSubtle().verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sig, payload); } catch { good = false; }
   if (!good) return bad();
-  if (kind === 2) { const mine = b32dec(devId()), want = payload.slice(8, 13); if (!mine || want.some((b, i) => b !== mine[i])) return bad('รหัสนี้ออกให้เครื่องอื่น ใช้กับเครื่องนี้ไม่ได้ ส่ง “รหัสเครื่อง” ของเครื่องนี้ให้ผู้พัฒนาเพื่อขอรหัสใหม่'); }
-  const redeemBy = payload[1] | (payload[2] << 8), dur = payload[3] | (payload[4] << 8), id = b64u.enc(payload.slice(5, 8)), st = licGet(), today = licToday();
+  if (kind === 2 || kind === 4) { const mine = b32dec(devId()), want = payload.slice(8, 13); if (!mine || want.some((b, i) => b !== mine[i])) return bad('รหัสนี้ออกให้เครื่องอื่น ใช้กับเครื่องนี้ไม่ได้ ส่ง “รหัสเครื่อง” ของเครื่องนี้ให้ผู้พัฒนาเพื่อขอรหัสใหม่'); }
+  const w1 = payload[1] | (payload[2] << 8), dur = payload[3] | (payload[4] << 8), id = b64u.enc(payload.slice(5, 8)), st = licGet(), today = licToday();
   st.ids = st.ids || [];
   if (st.ids.includes(id)) return { ok: true, again: true, exp: st.exp };
-  if (today > redeemBy) return bad('รหัสนี้เลยกำหนดใช้แล้ว ขอรหัสใหม่');
+  if (kind === 3 || kind === 4) { // the days run from the day the code was issued; a renewal while still active is added after the current end
+    const issued = w1, base = st.exp != null && st.exp >= issued - 1 ? st.exp : issued - 1, end = base + dur;
+    if (end < today) return bad('รหัสนี้หมดอายุแล้ว (นับวันตั้งแต่วันที่ออกรหัส) ขอรหัสใหม่');
+    st.exp = end; st.ids.push(id); licPut(st);
+    return { ok: true, exp: st.exp, days: dur };
+  }
+  if (today > w1) return bad('รหัสนี้เลยกำหนดใช้แล้ว ขอรหัสใหม่');
   const base = st.exp != null && st.exp >= today ? st.exp : today - 1;
   st.exp = base + dur; st.ids.push(id); licPut(st);
   return { ok: true, exp: st.exp, days: dur };
@@ -1930,15 +1936,16 @@ async function ownerCreate() {
 async function ownerIssue(days, note, redeemDays = 90, dev = null) { // dev: 5 bytes = the customer's device, or null for a code that works on any device
   const o = ownerGet(); if (!o) throw new Error('ยังไม่ได้ตั้งเครื่องเจ้าของ');
   const key = await licSubtle().importKey('jwk', o.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
-  const by = dayNum() + redeemDays, p = new Uint8Array(dev ? 13 : 8); p[0] = dev ? 2 : 1; if (dev) p.set(dev, 8); p[1] = by & 255; p[2] = (by >> 8) & 255; p[3] = days & 255; p[4] = (days >> 8) & 255; p.set(crypto.getRandomValues(new Uint8Array(3)), 5);
+  const by = dayNum(), p = new Uint8Array(dev ? 13 : 8); p[0] = dev ? 4 : 3; if (dev) p.set(dev, 8); p[1] = by & 255; p[2] = (by >> 8) & 255; p[3] = days & 255; p[4] = (days >> 8) & 255; p.set(crypto.getRandomValues(new Uint8Array(3)), 5);
   const sig = new Uint8Array(await licSubtle().sign({ name: 'ECDSA', hash: 'SHA-256' }, key, p)), out = new Uint8Array(p.length + 64); out.set(p); out.set(sig, p.length);
   const code = b64u.enc(out); let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
   list.unshift({ code, days, note: note || '', day: dayNum(), dev: dev ? devFmt(b32enc(dev)) : '' }); try { localStorage.setItem(LIC.ISSUED, JSON.stringify(list.slice(0, 200))); } catch { /* storage */ }
   return code;
 }
 const planName = d => ({ 7: 'ทดลอง 7 วัน', 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี', 3650: '10 ปี' })[d] || (d + ' วัน');
-const licMessage = (code, days) => `ขอบคุณที่สนับสนุนโน้ตเนตรครับ 🙏
+const licMessage = (code, days, day) => `ขอบคุณที่สนับสนุนโน้ตเนตรครับ 🙏
 นี่คือรหัสปลดล็อก แพ็กเกจ ${planName(days)}
+ใช้ได้ถึง ${dayStr((day == null ? dayNum() : day) + days - 1)} (นับวันตั้งแต่วันที่ออกรหัส)
 
 ${code}
 
@@ -1947,7 +1954,7 @@ ${code}
 2. แตะการ์ดสีเขียวบนสุด “สถานะการใช้งาน”
 3. แตะ “มีรหัสแล้ว? ใส่ที่นี่” แล้ววางรหัสด้านบน กด “ใส่รหัส”
 
-รหัสนี้ต้องใส่ภายใน 90 วันนับจากวันนี้ ถ้ามีปัญหาทักมาได้เลยครับ`;
+กรุณาใส่รหัสในแอปโดยเร็ว เพราะวันนับตั้งแต่วันที่ออกรหัส ถ้ามีปัญหาทักมาได้เลยครับ`;
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('คัดลอกแล้ว'); } catch { toast('คัดลอกไม่ได้ กดค้างที่ข้อความแล้วเลือกคัดลอก'); } }
 function openOwner(onclose) {
   const paint = () => {
@@ -1965,7 +1972,7 @@ function openOwner(onclose) {
       <input class="field" id="ownDev" placeholder="รหัสเครื่องของลูกค้า เช่น K7QM-4TDA" maxlength="12" autocapitalize="characters" spellcheck="false" style="margin-top:8px;display:none">
       <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
       <div id="ownOut"></div>
-      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
+      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)} · ถึง ${dayStr(x.day + x.days - 1)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
       <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
       <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>
       <h3 style="margin-top:16px">ใช้กุญแจสำรองแทน</h3><p class="sub">ถ้ากุญแจในเครื่องนี้ไม่ใช่ของแอป (เช่นสร้างผิดครั้ง) วางกุญแจสำรองที่เก็บไว้ที่นี่</p><textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o sm" data-o="imp" style="margin-top:8px">ใช้กุญแจสำรองนี้</button>`;
@@ -1980,10 +1987,10 @@ function openOwner(onclose) {
       else if (a === 'imp') { const t = $('#ownImp', s.el).value.trim(); const o = JSON.parse(t); if (!o.priv || !o.pub) throw new Error('x'); localStorage.setItem(LIC.OWNER, JSON.stringify(o)); await ownerCheck(); paint(); licCheck(true); }
       else if (a === 'cpub') copyText(ownerGet().pub);
       else if (a === 'bak') copyText(JSON.stringify(ownerGet()));
-      else if (a === 'issue') { let dev = null; if (bind) { dev = b32dec($('#ownDev', s.el).value); if (!dev) { toast('รหัสเครื่องไม่ถูกต้อง ต้องมี 8 ตัวอักษร เช่น K7QM-4TDA'); return; } } const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim(), 90, dev); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (ส่งให้ผู้ใช้ รหัสนี้ต้องใส่ภายใน 90 วัน):</p><button class="btn" data-o="cmsg" data-days="${dur}" style="width:100%;margin-bottom:8px">คัดลอกข้อความพร้อมส่ง (รหัส + วิธีใช้)</button><textarea class="field" readonly rows="3" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกเฉพาะรหัส</button>`; }
+      else if (a === 'issue') { let dev = null; if (bind) { dev = b32dec($('#ownDev', s.el).value); if (!dev) { toast('รหัสเครื่องไม่ถูกต้อง ต้องมี 8 ตัวอักษร เช่น K7QM-4TDA'); return; } } const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim(), 90, dev); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (วันนับตั้งแต่วันที่ออกรหัสนี้ ลูกค้าควรใส่ในแอปโดยเร็ว):</p><button class="btn" data-o="cmsg" data-days="${dur}" style="width:100%;margin-bottom:8px">คัดลอกข้อความพร้อมส่ง (รหัส + วิธีใช้)</button><textarea class="field" readonly rows="3" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกเฉพาะรหัส</button>`; }
       else if (a === 'ccode') copyText($('#ownCode', s.el).value);
-      else if (a === 'cmsg') copyText(licMessage($('#ownCode', s.el).value, +e.target.closest('[data-days]').dataset.days));
-      else if (a === 'cp') { let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ } const it = list[+e.target.closest('[data-i]').dataset.i]; copyText(licMessage(it.code, it.days)); }
+      else if (a === 'cmsg') copyText(licMessage($('#ownCode', s.el).value, +e.target.closest('[data-days]').dataset.days, dayNum()));
+      else if (a === 'cp') { let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ } const it = list[+e.target.closest('[data-i]').dataset.i]; copyText(licMessage(it.code, it.days, it.day)); }
     } catch (err) { toast('ทำไม่สำเร็จ: ' + (err.message || err)); }
   });
 }
