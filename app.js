@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-e';
+const BUILD = 'sheet-2026-11-26-f';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -675,7 +675,9 @@ async function runImport(s, st) {
 
 /* ───────────── menu, sets, song manager, backup ───────────── */
 function openMenu() {
+  const ls = licStatus();
   const s = sheet(`<h3>เมนู</h3><div class="menu">
+    ${ls.mode === 'off' ? '' : `<button data-m="lic" class="licrowm ${(ls.mode === 'trial' || ls.mode === 'paid') && ls.left <= 7 ? 'warn' : ''}"><span class="ic">★</span><span>สถานะการใช้งาน<small>${esc(licLeftText(ls))}</small></span></button>`}
     <button data-m="import"><span class="ic">⤓</span><span>นำเข้าโน้ต<small>ZIP หรือรูปจากแอปไฟล์ / iCloud</small></span></button>
     <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
     <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
@@ -688,7 +690,7 @@ function openMenu() {
     <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
     <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, topbar: openTopBar, wish: openWish, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo })[b.dataset.m](); });
+  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, topbar: openTopBar, wish: openWish, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo, lic: openLicence })[b.dataset.m](); });
 }
 
 function openRemoteTest() {
@@ -1250,7 +1252,8 @@ async function openInfo() {
   let est = ''; try { const e = await navigator.storage.estimate(); est = `ใช้พื้นที่ ${(e.usage / 1048576).toFixed(0)} MB จาก ${(e.quota / 1048576).toFixed(0)} MB`; } catch { est = 'ตรวจพื้นที่ไม่ได้'; }
   let pers = false; try { pers = await navigator.storage.persisted(); } catch { /* unsupported */ }
   const pages = [...S.songs.values()].reduce((a, x) => a + x.n, 0);
-  const s = sheet(`<h3>ข้อมูลและพื้นที่</h3><div class="help">เพลง ${S.songs.size} เพลง · ${pages} หน้า · ชุดเล่น ${S.sets.length} ชุด<br>${est}<br>ระบบ${pers ? '' : 'ยังไม่'}รับปากว่าจะไม่ล้างข้อมูลเอง${pers ? '' : ' (แนะนำสำรองไฟล์ไว้ และเปิดแอปจากไอคอนหน้าจอหลัก)'}<br><small>เวอร์ชัน ${BUILD}</small></div><h4 style="margin:12px 0 6px">บันทึกการทำงานล่าสุด</h4><p class="sub">ครั้งก่อนปิดแอป: ${LOG.prevClean ? 'ปกติ' : '<b style="color:var(--warn)">ไม่ปกติ (ค้างหรือถูกระบบปิด)</b>'}</p><pre class="rtlog" id="logbox" style="max-height:200px;overflow:auto;font-size:.72rem;white-space:pre-wrap">${esc([...LOG.prev.slice(-12), '--- เปิดแอปครั้งนี้ ---', ...LOG.a.slice(-12)].join('\n'))}</pre><div class="row2"><button class="btn o sm" id="logcopy">คัดลอกบันทึก</button></div><div class="row2"><button class="btn bad" data-w="1">ลบทุกอย่างในแอปนี้</button></div>`);
+  const s = sheet(`<h3 id="infoT">ข้อมูลและพื้นที่</h3><div class="help">เพลง ${S.songs.size} เพลง · ${pages} หน้า · ชุดเล่น ${S.sets.length} ชุด<br>${est}<br>ระบบ${pers ? '' : 'ยังไม่'}รับปากว่าจะไม่ล้างข้อมูลเอง${pers ? '' : ' (แนะนำสำรองไฟล์ไว้ และเปิดแอปจากไอคอนหน้าจอหลัก)'}<br><small>เวอร์ชัน ${BUILD}</small></div><h4 style="margin:12px 0 6px">บันทึกการทำงานล่าสุด</h4><p class="sub">ครั้งก่อนปิดแอป: ${LOG.prevClean ? 'ปกติ' : '<b style="color:var(--warn)">ไม่ปกติ (ค้างหรือถูกระบบปิด)</b>'}</p><pre class="rtlog" id="logbox" style="max-height:200px;overflow:auto;font-size:.72rem;white-space:pre-wrap">${esc([...LOG.prev.slice(-12), '--- เปิดแอปครั้งนี้ ---', ...LOG.a.slice(-12)].join('\n'))}</pre><div class="row2"><button class="btn o sm" id="logcopy">คัดลอกบันทึก</button></div><div class="row2"><button class="btn bad" data-w="1">ลบทุกอย่างในแอปนี้</button></div>`);
+  { let taps = 0, tt = 0; $('#infoT', s.el).addEventListener('click', () => { taps++; clearTimeout(tt); tt = setTimeout(() => { taps = 0; }, 2500); if (taps >= 7) { taps = 0; s.close(); openOwner(); } }); }
   $('#logcopy', s.el).onclick = async () => { const t = $('#logbox', s.el).textContent; try { await navigator.clipboard.writeText(t); void 0; } catch { toast('คัดลอกไม่ได้ ถ่ายภาพหน้าจอแทนได้'); } };
   s.el.addEventListener('click', async e => { if (!e.target.closest('[data-w]')) return;
     if (!(await confirmDel('ลบเพลงทั้งหมด?', 'รูปโน้ต ชุดเล่น และคิวในเครื่องนี้จะหายหมด (ไฟล์ต้นฉบับใน iCloud ไม่ถูกลบ)', 'ลบทั้งหมด'))) return;
@@ -1767,6 +1770,119 @@ let wake = null;
 async function keepAwake() { try { if (navigator.wakeLock && document.visibilityState === 'visible' && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch { /* not allowed */ } }
 document.addEventListener('visibilitychange', keepAwake); document.addEventListener('pointerdown', keepAwake, { once: true });
 
+/* ───────────── licence: free trial + unlock code (signed, checked offline) + owner tools ─────────────
+   The lock is OFF until the owner's public key is put in LIC.PUB. A code is signed with the owner's private key (kept only in the owner's
+   browser); the app checks the signature with the public key, so codes cannot be made without that private key. */
+const LIC = { PUB: '', TRIAL_DAYS: 14, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
+const b64u = {
+  enc: u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
+  dec: t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0)),
+};
+const dayNum = (d = new Date()) => Math.floor((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - Date.UTC(2020, 0, 1)) / 86400000);
+const dayStr = n => new Date(Date.UTC(2020, 0, 1) + n * 86400000).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'UTC' });
+const licGet = () => { try { return JSON.parse(localStorage.getItem(LIC.K) || '{}'); } catch { return {}; } };
+const licPut = o => { try { localStorage.setItem(LIC.K, JSON.stringify(o)); } catch { /* storage blocked */ } };
+const licPub = () => LIC.PUB || (location.hostname === 'localhost' ? (window.__licTestPub || '') : '');
+const isOwner = () => { try { return !!localStorage.getItem(LIC.OWNER); } catch { return false; } };
+function licToday() { const st = licGet(), t = dayNum(), m = Math.max(st.seen || 0, t); if (m !== st.seen) { st.seen = m; licPut(st); } return m; } // winding the clock back does not give days back
+function licStatus() {
+  if (!licPub()) return { mode: 'off' };
+  if (isOwner()) return { mode: 'owner' };
+  const st = licGet(), today = licToday();
+  if (st.exp != null) return today <= st.exp ? { mode: 'paid', left: st.exp - today + 1, exp: st.exp } : { mode: 'locked', why: 'expired', exp: st.exp };
+  if (st.start == null) { st.start = today; licPut(st); }
+  const left = st.start + LIC.TRIAL_DAYS - today;
+  return left > 0 ? { mode: 'trial', left } : { mode: 'locked', why: 'trial' };
+}
+const licSubtle = () => crypto.subtle;
+async function licRedeem(text) {
+  const bad = msg => ({ ok: false, msg: msg || 'รหัสไม่ถูกต้อง ตรวจว่าคัดลอกมาครบทั้งหมด' });
+  let bytes; try { bytes = b64u.dec(String(text).replace(/\s+/g, '')); } catch { return bad(); }
+  if (bytes.length !== 72 || bytes[0] !== 1) return bad();
+  const payload = bytes.slice(0, 8), sig = bytes.slice(8); let good = false;
+  try { const key = await licSubtle().importKey('raw', b64u.dec(licPub()), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']); good = await licSubtle().verify({ name: 'ECDSA', hash: 'SHA-256' }, key, sig, payload); } catch { good = false; }
+  if (!good) return bad();
+  const redeemBy = payload[1] | (payload[2] << 8), dur = payload[3] | (payload[4] << 8), id = b64u.enc(payload.slice(5, 8)), st = licGet(), today = licToday();
+  st.ids = st.ids || [];
+  if (st.ids.includes(id)) return { ok: true, again: true, exp: st.exp };
+  if (today > redeemBy) return bad('รหัสนี้เลยกำหนดใช้แล้ว ขอรหัสใหม่');
+  const base = st.exp != null && st.exp >= today ? st.exp : today - 1;
+  st.exp = base + dur; st.ids.push(id); licPut(st);
+  return { ok: true, exp: st.exp, days: dur };
+}
+const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
+function licCheck() {
+  const st = licStatus(), old = document.getElementById('lic');
+  if (st.mode !== 'locked') { old?.remove(); return; }
+  if (old) return;
+  const el = document.createElement('div'); el.id = 'lic';
+  el.innerHTML = `<div class="licbox"><h2>${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว'}</h2>
+    <p>โน้ตทั้งหมดของคุณยังอยู่ในเครื่องนี้ครบ ใส่รหัสปลดล็อกเพื่อใช้งานต่อ</p>
+    <textarea id="licc" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
+    <div id="licm" class="licm"></div>
+    <div class="licrow"><button class="btn o" id="licpaste">วางรหัส</button><button class="btn" id="licgo">ปลดล็อก</button></div>
+    <p class="sub">${esc(LIC.CONTACT)}</p></div>`;
+  document.body.append(el);
+  const msg = (t, ok) => { const m = $('#licm', el); m.textContent = t; m.className = 'licm' + (ok ? ' ok' : ''); };
+  $('#licpaste', el).onclick = async () => { try { $('#licc', el).value = await navigator.clipboard.readText(); } catch { msg('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก วาง'); } };
+  $('#licgo', el).onclick = async () => { const r = await licRedeem($('#licc', el).value); if (!r.ok) { msg(r.msg); return; } msg(`ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); setTimeout(licCheck, 900); };
+}
+function openLicence() {
+  const st = licStatus();
+  const s = sheet(`<h3>สถานะการใช้งาน</h3><p class="sub" style="font-size:1rem;color:var(--ink)">${esc(licLeftText(st))}</p>
+    ${st.mode === 'owner' ? '' : `<p class="sub">ใส่รหัสเพื่อต่ออายุ (ถ้ามีรหัสเหลืออายุอยู่ จะนับต่อท้ายให้)</p><textarea class="field" id="lcc" rows="3" placeholder="วางรหัสที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="lcm" class="licm"></div><button class="btn" id="lcgo" style="width:100%">ใส่รหัส</button><p class="sub">${esc(LIC.CONTACT)}</p>`}`);
+  const go = $('#lcgo', s.el); if (go) go.onclick = async () => { const r = await licRedeem($('#lcc', s.el).value), m = $('#lcm', s.el); if (!r.ok) { m.textContent = r.msg; m.className = 'licm'; return; } m.textContent = r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ต่ออายุแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`; m.className = 'licm ok'; };
+}
+/* owner tools: reached by tapping the title of "ข้อมูลและพื้นที่" seven times */
+const ownerGet = () => { try { return JSON.parse(localStorage.getItem(LIC.OWNER) || 'null'); } catch { return null; } };
+async function ownerCreate() {
+  const kp = await licSubtle().generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']);
+  const priv = await licSubtle().exportKey('jwk', kp.privateKey), pub = b64u.enc(new Uint8Array(await licSubtle().exportKey('raw', kp.publicKey)));
+  localStorage.setItem(LIC.OWNER, JSON.stringify({ priv, pub })); return pub;
+}
+async function ownerIssue(days, note, redeemDays = 30) {
+  const o = ownerGet(); if (!o) throw new Error('ยังไม่ได้ตั้งเครื่องเจ้าของ');
+  const key = await licSubtle().importKey('jwk', o.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  const by = dayNum() + redeemDays, p = new Uint8Array(8); p[0] = 1; p[1] = by & 255; p[2] = (by >> 8) & 255; p[3] = days & 255; p[4] = (days >> 8) & 255; p.set(crypto.getRandomValues(new Uint8Array(3)), 5);
+  const sig = new Uint8Array(await licSubtle().sign({ name: 'ECDSA', hash: 'SHA-256' }, key, p)), out = new Uint8Array(72); out.set(p); out.set(sig, 8);
+  const code = b64u.enc(out); let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
+  list.unshift({ code, days, note: note || '', day: dayNum() }); try { localStorage.setItem(LIC.ISSUED, JSON.stringify(list.slice(0, 200))); } catch { /* storage */ }
+  return code;
+}
+async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('คัดลอกแล้ว'); } catch { toast('คัดลอกไม่ได้ กดค้างที่ข้อความแล้วเลือกคัดลอก'); } }
+function openOwner() {
+  const paint = () => {
+    const o = ownerGet(); let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
+    box.innerHTML = !o ? `<p class="sub">ตั้งเครื่องนี้เป็น <b>เครื่องเจ้าของ</b> เพื่อออกรหัสปลดล็อกให้ผู้ใช้ เครื่องเจ้าของใช้ฟรีตลอด ไม่ถูกล็อก</p>
+      <button class="btn" data-o="make" style="width:100%">ตั้งเครื่องนี้เป็นเครื่องเจ้าของ</button>
+      <p class="sub" style="margin-top:14px">เปลี่ยนเครื่องหรือมีกุญแจสำรองอยู่แล้ว วางกุญแจสำรองที่นี่:</p>
+      <textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o" data-o="imp" style="width:100%;margin-top:8px">ใช้กุญแจสำรองนี้</button>`
+    : `<p class="sub">เครื่องนี้เป็นเครื่องเจ้าของ ใช้ฟรีตลอด</p>
+      <p class="sub">กุญแจตรวจรหัส (ส่งให้ผู้พัฒนาฝังในแอป ไม่ใช่ความลับ):</p><textarea class="field" readonly rows="2" id="ownPub">${esc(o.pub)}</textarea><button class="btn o sm" data-o="cpub">คัดลอกกุญแจตรวจรหัส</button>
+      <h3 style="margin-top:16px">ออกรหัสให้ผู้ใช้</h3>
+      <div class="pills" id="ownDur">${[[7, '7 วัน'], [30, '1 เดือน'], [90, '3 เดือน'], [365, '1 ปี'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
+      <input class="field" id="ownNote" placeholder="ชื่อผู้ใช้ (จดไว้เอง ไม่ใส่ก็ได้)" maxlength="40" style="margin-top:8px">
+      <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
+      <div id="ownOut"></div>
+      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : x.days + ' วัน'} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอก</button></div>`).join('')}</div>` : ''}
+      <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
+      <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>`;
+  };
+  const s = sheet('<h3>เมนูเจ้าของ</h3><div id="ownBox"></div>'), box = $('#ownBox', s.el); paint(); let dur = 30;
+  s.el.addEventListener('click', async e => {
+    const d = e.target.closest('#ownDur [data-d]'); if (d) { dur = +d.dataset.d; s.el.querySelectorAll('#ownDur [data-d]').forEach(b => b.classList.toggle('on', b === d)); return; }
+    const a = e.target.closest('[data-o]')?.dataset.o; if (!a) return;
+    try {
+      if (a === 'make') { if (await confirmDel('ตั้งเป็นเครื่องเจ้าของ?', 'เครื่องนี้จะใช้ฟรีตลอดและออกรหัสได้ อย่าลืมคัดลอกกุญแจสำรองเก็บไว้ (ล้างข้อมูลเว็บแล้วกุญแจจะหาย)', 'ตั้งเลย')) { await ownerCreate(); paint(); licCheck(); } }
+      else if (a === 'imp') { const t = $('#ownImp', s.el).value.trim(); const o = JSON.parse(t); if (!o.priv || !o.pub) throw new Error('x'); localStorage.setItem(LIC.OWNER, JSON.stringify(o)); paint(); licCheck(); }
+      else if (a === 'cpub') copyText(ownerGet().pub);
+      else if (a === 'bak') copyText(JSON.stringify(ownerGet()));
+      else if (a === 'issue') { const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim()); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (ส่งให้ผู้ใช้ รหัสนี้ต้องใส่ภายใน 30 วัน):</p><textarea class="field" readonly rows="4" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกรหัส</button>`; }
+      else if (a === 'ccode') copyText($('#ownCode', s.el).value);
+      else if (a === 'cp') { let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ } copyText(list[+e.target.closest('[data-i]').dataset.i].code); }
+    } catch (err) { toast('ทำไม่สำเร็จ: ' + (err.message || err)); }
+  });
+}
 /* ───────────── boot ───────────── */
 // does the page still run under the clock (translucent status bar)? if the system gives it a solid bar instead, the safe-area inset is 0 and the tags can sit at the very top
 { const pr = document.createElement('div'); pr.style.cssText = 'position:fixed;left:0;top:0;width:1px;height:env(safe-area-inset-top);visibility:hidden;pointer-events:none'; document.body.append(pr);
@@ -1784,8 +1900,8 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
     dd.addEventListener('click', e => { e.stopPropagation(); const song = curSong(); if (!song) return; if (DOT.off.has(song.id)) DOT.off.delete(song.id); else DOT.off.add(song.id); dotPaint(); }); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
-  applyTop(); loadState(); renderAll(); chromeArm();
+  applyTop(); loadState(); renderAll(); chromeArm(); licCheck(); setInterval(licCheck, 300000); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') licCheck(); });
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
-  window.__sheet = { S, DB, CROP, inkBox, ANN };
+  window.__sheet = { S, DB, CROP, inkBox, ANN, lic: { ownerCreate, ownerIssue, licStatus, licRedeem, dayNum } };
 })();
 })();

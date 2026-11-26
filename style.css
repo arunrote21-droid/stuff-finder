@@ -490,3 +490,14 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 #enm.folded{width:auto;padding:4px 6px;gap:6px;flex-wrap:nowrap}
 #enm.folded #enmi,#enm.folded #enmx,#enm.folded .enc{display:none}
 #enm.folded:not(.moved){left:auto;right:10px;transform:none}
+
+/* licence: lock screen, status row, owner tools */
+#lic{position:fixed;inset:0;z-index:9999;background:#0b1511;display:flex;align-items:center;justify-content:center;padding:20px;overflow:auto}
+#lic .licbox{width:min(480px,100%);display:flex;flex-direction:column;gap:12px}
+#lic h2{margin:0;font-size:1.5rem}
+#lic p{margin:0;color:var(--mut)}
+#lic textarea{width:100%;background:var(--s2);border:1.5px solid var(--line);border-radius:14px;color:var(--ink);padding:12px;font:inherit;font-size:.9rem;word-break:break-all;resize:none}
+.licm{min-height:1.2em;color:#ff9a9a;font-size:.9rem}.licm.ok{color:#6fe3a8}
+.licrow{display:flex;gap:10px}.licrow .btn{flex:1}
+.menu button.licrowm.warn small{color:#ffcf7a}
+.ownlist{max-height:240px;overflow:auto}
