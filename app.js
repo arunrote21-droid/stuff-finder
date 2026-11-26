@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-za';
+const BUILD = 'sheet-2026-11-26-zb';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1865,17 +1865,17 @@ async function licRedeem(text) {
 }
 const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.mode === 'grace' ? `รหัสหมดอายุแล้ว ผ่อนผันให้ใช้ต่ออีก ${st.left} วัน ต่ออายุได้ที่นี่` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
 /* the sales page: plans with the saving shown, and a button that opens LINE with the message already written */
-LIC.MONTH = 99;
+LIC.MONTH = 159;
 LIC.LINE = { id: '@700fggkk', oa: true };
 LIC.CONTACTS = [
   { label: 'LINE Official Account', value: '@700fggkk', open: 'https://line.me/R/ti/p/%40700fggkk', btn: 'เปิด LINE', color: '#06c755' },
   { label: 'Facebook เพจ · เปิดเพจ แล้วกด “ส่งข้อความ”', value: 'โน้ตเนตร', open: 'https://www.facebook.com/share/1BCz1P7CxT/', copy: 'https://www.facebook.com/share/1BCz1P7CxT/', btn: 'เปิดเพจ', color: '#1877f2' },
 ]; // where a customer can send the slip when the buy button cannot open LINE // LINE id (with @ for an Official Account); empty = just copy the message
 LIC.PLANS = [
-  { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ', qr: 'pay-1month.png' },
-  { d: 90, m: 3, name: '3 เดือน', price: 269, qr: 'pay-3months.png' },
-  { d: 180, m: 6, name: '6 เดือน', price: 499, badge: 'ยอดนิยม', qr: 'pay-6months.png' },
-  { d: 365, m: 12, name: '1 ปี', price: 899, badge: 'คุ้มที่สุด', qr: 'pay-1year.png' },
+  { d: 30, m: 1, name: '30 วัน', price: 159, tag: 'เริ่มต้นง่าย ๆ', qr: 'pay-1month.png' },
+  { d: 90, m: 3, name: '90 วัน', price: 429, qr: 'pay-3months.png' },
+  { d: 180, m: 6, name: '180 วัน', price: 799, badge: 'ยอดนิยม', qr: 'pay-6months.png' },
+  { d: 365, m: 12, name: '365 วัน', price: 1449, badge: 'คุ้มที่สุด', qr: 'pay-1year.png' },
 ];
 const planInfo = p => { const full = LIC.MONTH * p.m, save = full - p.price, pct = Math.round(save / full * 100); return { full, save, pct, per: Math.round(p.price / p.m), day: (p.price / p.d).toFixed(1) }; };
 function plansHTML(sel) {
@@ -1883,7 +1883,7 @@ function plansHTML(sel) {
     return `<button class="plan${i === sel ? ' on' : ''}${p.badge ? ' hot' : ''}" data-p="${i}"><span class="rd"></span>${p.badge ? `<span class="bdg">${p.badge}</span>` : ''}
       <div class="pl"><b>${p.name}</b>${f.pct ? `<span class="sv">ประหยัด ${f.pct}%</span>` : `<span class="tg">${p.tag || ''}</span>`}</div>
       <div class="pr">${f.pct ? `<s>${f.full}</s>` : ''}<strong>${p.price}</strong><em>บาท</em></div>
-      <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>${f.per} บาท/เดือน</b>${p.m === 12 ? ` · ตกวันละ ${f.day} บาท` : ''}` : `เดือนละ ${f.per} บาท เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
+      <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>วันละ ${f.day} บาท</b>` : `วันละ ${f.day} บาท · เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
 }
 function licPage(pfx, collapsed) {
   const code = `<textarea id="${pfx}c" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="${pfx}m" class="licm"></div>
@@ -1961,7 +1961,7 @@ async function ownerIssue(days, note, redeemDays = 90, dev = null) { // dev: 5 b
   list.unshift({ code, days, real, note: note || '', day: dayNum(), dev: dev ? devFmt(b32enc(dev)) : '' }); try { localStorage.setItem(LIC.ISSUED, JSON.stringify(list.slice(0, 200))); } catch { /* storage */ }
   return code;
 }
-const planName = d => ({ 7: 'ทดลอง 7 วัน', 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี', 3650: '10 ปี' })[d] || (d + ' วัน');
+const planName = d => ({ 7: 'ทดลอง 7 วัน', 30: '30 วัน', 90: '90 วัน', 180: '180 วัน', 365: '365 วัน', 3650: '10 ปี' })[d] || (d + ' วัน');
 const licMessage = (code, days, day) => `ขอบคุณที่สนับสนุนโน้ตเนตรครับ 🙏
 นี่คือรหัสปลดล็อก แพ็กเกจ ${planName(days)}
 ใช้ได้ถึง ${dayStr((day == null ? dayNum() : day) + days - 1)} (นับวันตั้งแต่วันที่ออกรหัส)
@@ -1987,13 +1987,13 @@ function openOwner(onclose) {
       <p class="sub">เครื่องนี้เป็นเครื่องเจ้าของ ใช้ฟรีตลอด</p>
       <p class="sub">กุญแจตรวจรหัส (ส่งให้ผู้พัฒนาฝังในแอป ไม่ใช่ความลับ):</p><textarea class="field" readonly rows="2" id="ownPub">${esc(o.pub)}</textarea><button class="btn o sm" data-o="cpub">คัดลอกกุญแจตรวจรหัส</button>
       <h3 style="margin-top:16px">ออกรหัสให้ผู้ใช้</h3>
-      <div class="pills" id="ownDur">${[[7, 'ทดลอง 7 วัน'], [30, '1 เดือน'], [90, '3 เดือน'], [180, '6 เดือน'], [365, '1 ปี'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
+      <div class="pills" id="ownDur">${[[7, 'ทดลอง 7 วัน'], [30, '30 วัน'], [90, '90 วัน'], [180, '180 วัน'], [365, '365 วัน'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
       <input class="field" id="ownNote" placeholder="ชื่อผู้ใช้ (จดไว้เอง ไม่ใส่ก็ได้)" maxlength="40" style="margin-top:8px">
       <div class="pills" id="ownBind" style="margin-top:8px"><button data-b="0" class="on">ใช้ได้ทุกเครื่อง (ปกติ)</button><button data-b="1">ผูกกับเครื่องเดียว</button></div>
       <input class="field" id="ownDev" placeholder="รหัสเครื่องของลูกค้า เช่น K7QM-4TDA" maxlength="12" autocapitalize="characters" spellcheck="false" style="margin-top:8px;display:none">
       <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
       <div id="ownOut"></div>
-      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)} · ถึง ${dayStr(x.day + (x.real || x.days) - 1)}${(x.real || x.days) > x.days ? ' (แถม ' + ((x.real || x.days) - x.days) + ' วัน)' : ''}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
+      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '30 วัน', 90: '90 วัน', 180: '180 วัน', 365: '365 วัน' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)} · ถึง ${dayStr(x.day + (x.real || x.days) - 1)}${(x.real || x.days) > x.days ? ' (แถม ' + ((x.real || x.days) - x.days) + ' วัน)' : ''}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
       <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
       <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>
       <h3 style="margin-top:16px">ใช้กุญแจสำรองแทน</h3><p class="sub">ถ้ากุญแจในเครื่องนี้ไม่ใช่ของแอป (เช่นสร้างผิดครั้ง) วางกุญแจสำรองที่เก็บไว้ที่นี่</p><textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o sm" data-o="imp" style="margin-top:8px">ใช้กุญแจสำรองนี้</button>`;
