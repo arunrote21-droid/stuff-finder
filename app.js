@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-x';
+const BUILD = 'sheet-2026-11-26-y';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1869,7 +1869,7 @@ LIC.MONTH = 99;
 LIC.LINE = { id: '@700fggkk', oa: true };
 LIC.CONTACTS = [
   { label: 'LINE Official Account', value: '@700fggkk', open: 'https://line.me/R/ti/p/%40700fggkk', btn: 'เปิด LINE', color: '#06c755' },
-  { label: 'Facebook เพจ · กด “ส่งข้อความ” เพื่อส่งสลิป', value: 'โน้ตเนตร', open: 'https://www.facebook.com/share/1BCz1P7CxT/', copy: 'https://www.facebook.com/share/1BCz1P7CxT/', btn: 'ส่งเข้าเพจ', color: '#1877f2' },
+  { label: 'Facebook เพจ · เปิดแชตเพื่อส่งสลิป', value: 'โน้ตเนตร', open: 'https://m.me/1529893086867761', copy: 'https://m.me/1529893086867761', btn: 'ส่งเข้าเพจ', color: '#1877f2' },
 ]; // where a customer can send the slip when the buy button cannot open LINE // LINE id (with @ for an Official Account); empty = just copy the message
 LIC.PLANS = [
   { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ', qr: 'pay-1month.png' },
