@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-p';
+const BUILD = 'sheet-2026-11-26-q';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -97,11 +97,18 @@ function toast(msg, action) {
 }
 function sheet(inner, { onclose } = {}) {
   const sc = document.createElement('div'); sc.className = 'scrim';
-  sc.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div>${inner}</div>`;
+  sc.innerHTML = `<div class="sheet" role="dialog" aria-modal="true"><div class="grab"></div><button class="sx" type="button" aria-label="ปิด">✕</button>${inner}</div>`;
   const close = () => { sc.remove(); onclose?.(); if (typeof chromeArm === 'function') chromeArm(); };
   sc.addEventListener('pointerdown', e => { if (e.target === sc) close(); });
+  const sh = sc.firstChild;
+  $('.sx', sh).addEventListener('click', close); // always a visible way out, same as tapping outside
+  { const gr = $('.grab', sh); let st = null; // drag the handle down to close
+    gr.addEventListener('pointerdown', e => { st = { y: e.clientY, id: e.pointerId }; try { gr.setPointerCapture(e.pointerId); } catch { /* ok */ } sh.style.transition = 'none'; });
+    gr.addEventListener('pointermove', e => { if (!st || e.pointerId !== st.id) return; const dy = Math.max(0, e.clientY - st.y); sh.style.transform = `translateY(${dy}px)`; });
+    const end = e => { if (!st || e.pointerId !== st.id) return; const dy = e.clientY - st.y; st = null; sh.style.transition = 'transform .18s'; if (dy > 90) close(); else sh.style.transform = ''; };
+    gr.addEventListener('pointerup', end); gr.addEventListener('pointercancel', end); }
   $('#layer').append(sc);
-  return { el: sc.firstChild, close, scrim: sc };
+  return { el: sh, close, scrim: sc };
 }
 function ask({ title, text, buttons }) {
   return new Promise(res => {
