@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-m';
+const BUILD = 'sheet-2026-11-26-n';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -676,21 +676,42 @@ async function runImport(s, st) {
 /* ───────────── menu, sets, song manager, backup ───────────── */
 function openMenu() {
   const ls = licStatus();
-  const s = sheet(`<h3>เมนู</h3><div class="menu">
-    ${ls.mode === 'off' ? '' : `<button data-m="lic" class="licrowm ${ls.mode === 'grace' || ((ls.mode === 'trial' || ls.mode === 'paid') && ls.left <= 7) ? 'warn' : ''}"><span class="ic">★</span><span>สถานะการใช้งาน<small>${esc(licLeftText(ls))}</small></span></button>`}
-    <button data-m="import"><span class="ic">⤓</span><span>นำเข้าโน้ต<small>ZIP หรือรูปจากแอปไฟล์ / iCloud</small></span></button>
-    <button data-m="sets"><span class="ic">♪</span><span>ชุดเล่น<small>บันทึกคิวไว้ใช้ซ้ำ เช่น ชุดคืนวันศุกร์</small></span></button>
-    <button data-m="manage"><span class="ic">✎</span><span>จัดการเพลง<small>เปลี่ยนชื่อ ลบ (${S.songs.size} เพลง)</small></span></button>
-    <button data-m="backup"><span class="ic">⤒</span><span>สำรองข้อมูล<small>ดาวน์โหลดเป็นไฟล์ ZIP เก็บไว้เผื่อเครื่องล้างข้อมูล</small></span></button>
-    <button data-m="fs"><span class="ic">⛶</span><span>โหมดอ่านเต็มจอ<small>${FS.on ? 'เปิดอยู่ แถบบน/ล่างพับเองหลังไม่แตะ 4-5 วินาที แตะกลางโน้ตเพื่อซ่อนทันที แตะขอบบน/ล่างเพื่อเรียกกลับ' : 'ปิดอยู่'}</small></span></button>
-    <button data-m="trim"><span class="ic">▣</span><span>ตัดขอบขาวอัตโนมัติ<small>${CROP.on ? 'เปิดอยู่ แสดงเฉพาะส่วนที่มีโน้ต โน้ตจะใหญ่ขึ้น' : 'ปิดอยู่'}</small></span></button>
-    <button data-m="topbar"><span class="ic">▤</span><span>ขอบบนของจอ<small>เลือกแถบใต้นาฬิกา: โน้ตเต็มขอบ / แถบดำ / แถบขาว</small></span></button>
-    <button data-m="ann"><span class="ic">✎</span><span>แสดงรอยที่วาดบนโน้ต<small>${ANN.show ? 'เปิดอยู่ (กดปุ่ม ✎ ด้านบนเพื่อวาด)' : 'ปิดอยู่ ยังบันทึกรอยไว้'}</small></span></button>
-    <button data-m="wish"><span class="ic">♫</span><span>เพลงที่ยังไม่มีโน้ต<small>${WISH.list.length ? WISH.list.length + ' เพลงที่ค้นในเว็บแล้วจดไว้' : 'จดให้เองเมื่อค้นเพลงในเว็บ'}</small></span></button>
-    <button data-m="remote"><span class="ic">⌁</span><span>ทดสอบรีโมท<small>ดูว่าปุ่มเหยียบ/รีโมทส่งอะไรมา</small></span></button>
-    <button data-m="info"><span class="ic">ⓘ</span><span>ข้อมูลและพื้นที่<small>เวอร์ชัน ${BUILD}</small></span></button>
+  const warn = (ls.mode === 'trial' || ls.mode === 'paid') && ls.left <= 7;
+  const card = ls.mode === 'off' ? '' : (() => {
+    const owner = ls.mode === 'owner', trial = ls.mode === 'trial', paid = ls.mode === 'paid', locked = ls.mode === 'locked';
+    const top = owner ? 'เครื่องเจ้าของ' : trial ? 'ทดลองใช้ฟรี' : paid ? `ใช้งานได้ถึง ${dayStr(ls.exp)}` : 'สิ้นสุดการใช้งาน';
+    const big = owner ? 'ใช้ฟรีตลอด' : (trial || paid) ? `เหลือ ${ls.left} วัน` : 'ต่ออายุเพื่อใช้ต่อ';
+    const bar = trial ? `<div class="mbar"><i style="width:${Math.max(4, Math.round(ls.left / LIC.TRIAL_DAYS * 100))}%"></i></div>` : '';
+    return `<button data-m="lic" class="mstat ${owner ? 'own' : warn || locked ? 'warn' : paid ? 'paid' : ''}"><span class="ms1">${top}</span><span class="ms2">${big}</span>${bar}${owner ? '' : `<span class="ms3">${warn ? 'ใกล้หมดแล้ว · ต่ออายุได้ที่นี่' : 'ดูแพ็กเกจและต่ออายุ'} ›</span>`}</button>`;
+  })();
+  const row = (m, ic, t, sub, tog) => `<button data-m="${m}"${tog ? ' class="tg"' : ''}><span class="ic">${ic}</span><span class="mt">${t}<small>${sub}</small></span>${tog ? `<span class="sw${tog === 'on' ? ' on' : ''}"><i></i></span>` : '<span class="chev">›</span>'}</button>`;
+  const s = sheet(`<h3>เมนู</h3><div class="menu">${card}
+    <div class="mg">โน้ตของฉัน</div><div class="mcard">
+      ${row('import', '⤓', 'นำเข้าโน้ต', 'ZIP หรือรูปจากแอปไฟล์ / iCloud')}
+      ${row('manage', '✎', 'จัดการเพลง', `${S.songs.size} เพลง · เปลี่ยนชื่อ ดูตัวอย่าง ลบ`)}
+      ${WISH.list.length ? row('wish', '♫', 'เพลงที่ยังไม่มีโน้ต', `${WISH.list.length} เพลงที่จดไว้จากการค้นเว็บ`) : ''}
+    </div>
+    <div class="mg">การแสดงผล</div><div class="mcard">
+      ${row('fs', '⛶', 'โหมดอ่านเต็มจอ', 'แถบพับเองหลังไม่แตะ 4–5 วินาที', FS.on ? 'on' : 'off')}
+      ${row('trim', '▣', 'ตัดขอบขาวอัตโนมัติ', 'ขยายโน้ตให้ใหญ่ขึ้น', CROP.on ? 'on' : 'off')}
+      ${row('ann', '✎', 'แสดงรอยที่เขียนบนโน้ต', 'เปิด/ปิดการแสดง ยังเก็บรอยไว้', ANN.show ? 'on' : 'off')}
+      ${row('topbar', '▤', 'ขอบบนของจอ', 'โน้ตเต็มขอบ / แถบดำ / แถบขาว')}
+    </div>
+    <div class="mg">ข้อมูล</div><div class="mcard">
+      ${row('backup', '⤒', 'สำรองข้อมูล', 'เก็บไฟล์ ZIP กันข้อมูลหาย')}
+      ${row('info', 'ⓘ', 'ข้อมูลและพื้นที่', `เวอร์ชัน ${BUILD}`)}
+    </div>
+    <details class="mmore"><summary>เครื่องมือเสริม</summary><div class="mcard">
+      ${row('sets', '♪', 'รายการชุดเล่น', 'ดูและจัดการชุด (ปกติใช้แถบชุดด้านบน)')}
+      ${row('remote', '⌁', 'ทดสอบรีโมท / ตัวเหยียบ', 'ดูว่าปุ่มเหยียบส่งอะไรมา')}
+    </div></details>
   </div>`);
-  s.el.addEventListener('click', e => { const b = e.target.closest('[data-m]'); if (!b) return; s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, fs: toggleFs, topbar: openTopBar, wish: openWish, trim: toggleTrim, ann: toggleAnn, remote: openRemoteTest, info: openInfo, lic: openLicence })[b.dataset.m](); });
+  const TOG = { fs: [toggleFs, () => FS.on], trim: [toggleTrim, () => CROP.on], ann: [toggleAnn, () => ANN.show] };
+  s.el.addEventListener('click', e => {
+    const b = e.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m;
+    if (TOG[m]) { TOG[m][0](); b.querySelector('.sw').classList.toggle('on', !!TOG[m][1]()); return; } // switches change in place, the menu stays open
+    s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, topbar: openTopBar, wish: openWish, remote: openRemoteTest, info: openInfo, lic: openLicence })[m]();
+  });
 }
 
 function openRemoteTest() {
