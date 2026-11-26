@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-i';
+const BUILD = 'sheet-2026-11-26-j';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1773,7 +1773,7 @@ document.addEventListener('visibilitychange', keepAwake); document.addEventListe
 /* ───────────── licence: free trial + unlock code (signed, checked offline) + owner tools ─────────────
    The lock is OFF until the owner's public key is put in LIC.PUB. A code is signed with the owner's private key (kept only in the owner's
    browser); the app checks the signature with the public key, so codes cannot be made without that private key. */
-const LIC = { PUB: '', TRIAL_DAYS: 14, GRACE: 0, AWAY: 30 * 60000, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
+const LIC = { PUB: 'BF5oY9GVsSreYWetnnNvmCjx4HvUNbMEKbuyBtC4hrlUcHRBT2Udq0uXGvSUJWqGiaFy0llFuaxbnLVs3y2ZdL0', TRIAL_DAYS: 14, GRACE: 0, AWAY: 30 * 60000, CONTACT: 'ขอรหัสปลดล็อกได้จากผู้พัฒนาแอปทาง LINE', K: 'sheet:lic', OWNER: 'sheet:ownerkey', ISSUED: 'sheet:issued' };
 const b64u = {
   enc: u => btoa(String.fromCharCode(...u)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, ''),
   dec: t => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - t.length % 4) % 4)), c => c.charCodeAt(0)),
@@ -1875,6 +1875,7 @@ function licCheck(allowLock) { // allowLock: only when the app is opened or come
   const el = document.createElement('div'); el.id = 'lic';
   el.innerHTML = `<div class="licbox"><div class="licbrand"><img src="apple-touch-icon.png" alt="" width="60" height="60"><div><b>โน้ตเนตร</b><span>โน้ตเพลงบนเวที เปิดเร็ว เล่นลื่น</span></div></div>\n    <span class="licchip">${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'สิ้นสุดช่วงทดลองใช้'}</span><h2>เล่นต่อได้ทันที เลือกแพ็กเกจที่เหมาะกับคุณ</h2><p class="licsub">โน้ตทั้งหมดของคุณยังอยู่ครบในเครื่องนี้ ไม่มีอะไรหาย</p>${licPage('lic', false)}</div>`;
   document.body.append(el); licWire(el, 'lic', () => setTimeout(() => licCheck(true), 900));
+  { let taps = 0, tt = 0; $('.licbrand', el).addEventListener('click', () => { taps++; clearTimeout(tt); tt = setTimeout(() => { taps = 0; }, 2500); if (taps >= 7) { taps = 0; el.style.display = 'none'; verifyPin('ใส่รหัส 4 หลักเพื่อเข้าเมนูเจ้าของ', 'เมนูเจ้าของ').then(ok => { if (ok) openOwner(() => { el.style.display = ''; licCheck(true); }); else el.style.display = ''; }); } }); } // owner recovery: tap the logo 7 times
 }
 function openLicence() {
   const st = licStatus();
@@ -1898,7 +1899,7 @@ async function ownerIssue(days, note, redeemDays = 90) {
   return code;
 }
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('คัดลอกแล้ว'); } catch { toast('คัดลอกไม่ได้ กดค้างที่ข้อความแล้วเลือกคัดลอก'); } }
-function openOwner() {
+function openOwner(onclose) {
   const paint = () => {
     const o = ownerGet(); let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
     box.innerHTML = !o ? `<p class="sub">ตั้งเครื่องนี้เป็น <b>เครื่องเจ้าของ</b> เพื่อออกรหัสปลดล็อกให้ผู้ใช้ เครื่องเจ้าของใช้ฟรีตลอด ไม่ถูกล็อก</p>
@@ -1914,9 +1915,10 @@ function openOwner() {
       <div id="ownOut"></div>
       ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอก</button></div>`).join('')}</div>` : ''}
       <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
-      <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>`;
+      <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>
+      <h3 style="margin-top:16px">ใช้กุญแจสำรองแทน</h3><p class="sub">ถ้ากุญแจในเครื่องนี้ไม่ใช่ของแอป (เช่นสร้างผิดครั้ง) วางกุญแจสำรองที่เก็บไว้ที่นี่</p><textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o sm" data-o="imp" style="margin-top:8px">ใช้กุญแจสำรองนี้</button>`;
   };
-  const s = sheet('<h3>เมนูเจ้าของ</h3><div id="ownBox"></div>'), box = $('#ownBox', s.el); paint(); let dur = 30;
+  const s = sheet('<h3>เมนูเจ้าของ</h3><div id="ownBox"></div>', { onclose }), box = $('#ownBox', s.el); paint(); let dur = 30;
   s.el.addEventListener('click', async e => {
     const d = e.target.closest('#ownDur [data-d]'); if (d) { dur = +d.dataset.d; s.el.querySelectorAll('#ownDur [data-d]').forEach(b => b.classList.toggle('on', b === d)); return; }
     const a = e.target.closest('[data-o]')?.dataset.o; if (!a) return;
