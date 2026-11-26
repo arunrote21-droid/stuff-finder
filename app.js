@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-s';
+const BUILD = 'sheet-2026-11-26-t';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1933,13 +1933,14 @@ async function ownerCreate() {
   const priv = await licSubtle().exportKey('jwk', kp.privateKey), pub = b64u.enc(new Uint8Array(await licSubtle().exportKey('raw', kp.publicKey)));
   localStorage.setItem(LIC.OWNER, JSON.stringify({ priv, pub })); return pub;
 }
+const BONUS_DAYS = { 30: 2, 90: 2, 180: 2, 365: 2 }; // a quiet gift on every sold plan: it is inside the code, never mentioned to the customer
 async function ownerIssue(days, note, redeemDays = 90, dev = null) { // dev: 5 bytes = the customer's device, or null for a code that works on any device
   const o = ownerGet(); if (!o) throw new Error('ยังไม่ได้ตั้งเครื่องเจ้าของ');
   const key = await licSubtle().importKey('jwk', o.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
-  const by = dayNum(), p = new Uint8Array(dev ? 13 : 8); p[0] = dev ? 4 : 3; if (dev) p.set(dev, 8); p[1] = by & 255; p[2] = (by >> 8) & 255; p[3] = days & 255; p[4] = (days >> 8) & 255; p.set(crypto.getRandomValues(new Uint8Array(3)), 5);
+  const real = days + (BONUS_DAYS[days] || 0), by = dayNum(), p = new Uint8Array(dev ? 13 : 8); p[0] = dev ? 4 : 3; if (dev) p.set(dev, 8); p[1] = by & 255; p[2] = (by >> 8) & 255; p[3] = real & 255; p[4] = (real >> 8) & 255; p.set(crypto.getRandomValues(new Uint8Array(3)), 5);
   const sig = new Uint8Array(await licSubtle().sign({ name: 'ECDSA', hash: 'SHA-256' }, key, p)), out = new Uint8Array(p.length + 64); out.set(p); out.set(sig, p.length);
   const code = b64u.enc(out); let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
-  list.unshift({ code, days, note: note || '', day: dayNum(), dev: dev ? devFmt(b32enc(dev)) : '' }); try { localStorage.setItem(LIC.ISSUED, JSON.stringify(list.slice(0, 200))); } catch { /* storage */ }
+  list.unshift({ code, days, real, note: note || '', day: dayNum(), dev: dev ? devFmt(b32enc(dev)) : '' }); try { localStorage.setItem(LIC.ISSUED, JSON.stringify(list.slice(0, 200))); } catch { /* storage */ }
   return code;
 }
 const planName = d => ({ 7: 'ทดลอง 7 วัน', 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี', 3650: '10 ปี' })[d] || (d + ' วัน');
@@ -1972,7 +1973,7 @@ function openOwner(onclose) {
       <input class="field" id="ownDev" placeholder="รหัสเครื่องของลูกค้า เช่น K7QM-4TDA" maxlength="12" autocapitalize="characters" spellcheck="false" style="margin-top:8px;display:none">
       <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
       <div id="ownOut"></div>
-      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)} · ถึง ${dayStr(x.day + x.days - 1)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
+      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')}${x.dev ? ' · เครื่อง ' + x.dev : ' · ไม่ผูกเครื่อง'} · ออกเมื่อ ${dayStr(x.day)} · ถึง ${dayStr(x.day + (x.real || x.days) - 1)}${(x.real || x.days) > x.days ? ' (แถม ' + ((x.real || x.days) - x.days) + ' วัน)' : ''}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอกข้อความ</button></div>`).join('')}</div>` : ''}
       <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
       <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>
       <h3 style="margin-top:16px">ใช้กุญแจสำรองแทน</h3><p class="sub">ถ้ากุญแจในเครื่องนี้ไม่ใช่ของแอป (เช่นสร้างผิดครั้ง) วางกุญแจสำรองที่เก็บไว้ที่นี่</p><textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o sm" data-o="imp" style="margin-top:8px">ใช้กุญแจสำรองนี้</button>`;
