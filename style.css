@@ -558,3 +558,5 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .licsteps li span{flex:none;width:24px;height:24px;border-radius:50%;background:rgba(255,255,255,.08);color:var(--ink);font-size:.78rem;font-weight:600;display:grid;place-items:center}
 .licsteps b{color:var(--ink);font-weight:600}
 .lichave{margin-top:6px}
+.licdev{display:flex;justify-content:space-between;align-items:center;gap:10px;background:rgba(255,255,255,.05);border:1px dashed rgba(255,255,255,.2);border-radius:14px;padding:10px 14px;margin-top:4px}
+.licdev span{color:var(--mut);font-size:.85rem}.licdev b{font-size:1.2rem;letter-spacing:2px;font-weight:600;color:var(--ac)}
