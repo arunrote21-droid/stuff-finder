@@ -501,3 +501,25 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .licrow{display:flex;gap:10px}.licrow .btn{flex:1}
 .menu button.licrowm.warn small{color:#ffcf7a}
 .ownlist{max-height:240px;overflow:auto}
+
+/* sales page */
+#lic{align-items:flex-start}
+#lic .licbox{margin:auto;padding:10px 0 24px;width:min(520px,100%)}
+.licsub{margin:0;color:var(--mut);font-size:.95rem}
+.licnow{margin:0 0 10px;font-size:1.05rem;font-weight:700}
+.licpitch{display:flex;flex-direction:column;gap:12px}
+.licben{display:flex;flex-direction:column;gap:6px;font-size:.92rem;color:var(--ink);background:rgba(255,255,255,.05);border-radius:14px;padding:10px 12px}
+.plans{display:flex;flex-direction:column;gap:12px;margin-top:4px}
+.plan{position:relative;text-align:left;background:var(--s2);border:2px solid var(--line);border-radius:18px;padding:12px 14px 12px;color:var(--ink);display:block;width:100%}
+.plan.on{border-color:var(--ac);background:rgba(51,214,159,.13)}
+.plan .bdg{position:absolute;top:-11px;right:14px;background:#ffb020;color:#2a1a00;font-size:.74rem;font-weight:800;padding:2px 11px;border-radius:99px}
+.plan .pl{display:flex;align-items:center;gap:8px}.plan .pl b{font-size:1.08rem}
+.plan .sv{background:rgba(255,90,90,.2);color:#ff9f9f;font-size:.74rem;font-weight:800;padding:2px 9px;border-radius:99px}
+.plan .tg{color:var(--mut);font-size:.78rem}
+.plan .pr{display:flex;align-items:baseline;gap:7px;margin-top:2px}.plan .pr strong{font-size:2rem;line-height:1.1}.plan .pr s{color:var(--mut);font-size:.95rem}.plan .pr em{font-style:normal;color:var(--mut)}
+.plan .pm{color:var(--mut);font-size:.84rem;margin-top:1px}.plan .pm b{color:var(--ac)}
+.licline{width:100%;height:56px;font-size:1.05rem;margin-top:4px}
+.licsteps{margin:4px 0 0;padding-left:20px;color:var(--mut);font-size:.86rem;display:flex;flex-direction:column;gap:3px}.licsteps b{color:var(--ink)}
+.lichave{display:flex;flex-direction:column;gap:8px;border-top:1px solid var(--line);padding-top:12px;margin-top:4px}
+.lichave summary{cursor:pointer;font-weight:700;color:var(--ink)}
+.lichave textarea{width:100%;background:var(--s2);border:1.5px solid var(--line);border-radius:14px;color:var(--ink);padding:12px;font:inherit;font-size:.9rem;word-break:break-all;resize:none}

@@ -1811,27 +1811,59 @@ async function licRedeem(text) {
   return { ok: true, exp: st.exp, days: dur };
 }
 const licLeftText = st => st.mode === 'owner' ? 'เครื่องเจ้าของ ใช้ฟรีตลอด' : st.mode === 'paid' ? `ใช้ได้ถึง ${dayStr(st.exp)} (อีก ${st.left} วัน)` : st.mode === 'trial' ? `ทดลองใช้ เหลือ ${st.left} วัน` : st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว';
+/* the sales page: plans with the saving shown, and a button that opens LINE with the message already written */
+LIC.MONTH = 99;
+LIC.LINE = { id: '', oa: true }; // LINE id (with @ for an Official Account); empty = just copy the message
+LIC.PLANS = [
+  { d: 30, m: 1, name: '1 เดือน', price: 99, tag: 'เริ่มต้นง่าย ๆ' },
+  { d: 90, m: 3, name: '3 เดือน', price: 269 },
+  { d: 180, m: 6, name: '6 เดือน', price: 499, badge: 'ยอดนิยม' },
+  { d: 365, m: 12, name: '1 ปี', price: 899, badge: 'คุ้มที่สุด' },
+];
+const planInfo = p => { const full = LIC.MONTH * p.m, save = full - p.price, pct = Math.round(save / full * 100); return { full, save, pct, per: Math.round(p.price / p.m), day: (p.price / p.d).toFixed(1) }; };
+function plansHTML(sel) {
+  return `<div class="plans">${LIC.PLANS.map((p, i) => { const f = planInfo(p);
+    return `<button class="plan${i === sel ? ' on' : ''}${p.badge ? ' hot' : ''}" data-p="${i}">${p.badge ? `<span class="bdg">${p.badge}</span>` : ''}
+      <div class="pl"><b>${p.name}</b>${f.pct ? `<span class="sv">ประหยัด ${f.pct}%</span>` : `<span class="tg">${p.tag || ''}</span>`}</div>
+      <div class="pr">${f.pct ? `<s>${f.full}</s>` : ''}<strong>${p.price}</strong><em>บาท</em></div>
+      <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>${f.per} บาท/เดือน</b> · ลดไป ${f.save} บาท${p.m === 12 ? ` · ตกวันละ ${f.day} บาท` : ''}` : `เดือนละ ${f.per} บาท เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
+}
+function licPage(pfx, collapsed) {
+  const code = `<textarea id="${pfx}c" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="${pfx}m" class="licm"></div>
+    <div class="licrow"><button class="btn o" id="${pfx}paste">วางรหัส</button><button class="btn" id="${pfx}go">ใส่รหัส</button></div>`;
+  return `<div class="licpitch"><div class="licben"><span>✓ เปิดโน้ตได้ไม่จำกัด ปัดเปลี่ยนหน้าลื่นกลางเวที</span><span>✓ ชุดเพลง คิว และเขียนโน้ตบน iPad ได้เต็มที่</span><span>✓ โน้ตอยู่ในเครื่องคุณ ไม่ต้องต่อเน็ตก็เล่นได้</span></div>
+    ${plansHTML(2)}
+    <button class="btn licline" id="${pfx}line"></button>
+    <ol class="licsteps"><li>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE”</li><li>รับ QR โอนเงินจากผู้พัฒนาในแชต</li><li>ส่งสลิป รับ <b>รหัสปลดล็อก</b> กลับมา</li><li>วางรหัสในช่องด้านล่าง ใช้ต่อได้ทันที</li></ol>
+    ${collapsed ? `<details class="lichave"><summary>มีรหัสแล้ว? ใส่ที่นี่</summary>${code}</details>` : `<div class="lichave"><b>มีรหัสแล้ว? ใส่ที่นี่</b>${code}</div>`}</div>`;
+}
+function licWire(root, pfx, onOk) {
+  let sel = 2; const btn = $('#' + pfx + 'line', root);
+  const paintBtn = () => { const p = LIC.PLANS[sel]; btn.textContent = `แจ้งซื้อแพ็กเกจ ${p.name} · ${p.price} บาท ทาง LINE`; root.querySelectorAll('.plan').forEach((b, i) => b.classList.toggle('on', i === sel)); };
+  root.querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.p; paintBtn(); }));
+  btn.addEventListener('click', async () => {
+    const p = LIC.PLANS[sel], text = `สวัสดีครับ ขอซื้อโน้ตเนตร แพ็กเกจ ${p.name} ราคา ${p.price} บาท`;
+    try { await navigator.clipboard.writeText(text); } catch { /* the link below still carries the text */ }
+    const L = LIC.LINE; if (!L.id) { toast('ข้อความคัดลอกแล้ว วางส่งให้ผู้พัฒนาทาง LINE'); return; }
+    location.href = L.oa ? `https://line.me/R/oaMessage/${L.id}/?${encodeURIComponent(text)}` : `https://line.me/ti/p/~${L.id.replace(/^@/, '')}`;
+  });
+  const msg = (t, ok) => { const m = $('#' + pfx + 'm', root); m.textContent = t; m.className = 'licm' + (ok ? ' ok' : ''); };
+  $('#' + pfx + 'paste', root).onclick = async () => { try { $('#' + pfx + 'c', root).value = await navigator.clipboard.readText(); } catch { msg('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก วาง'); } };
+  $('#' + pfx + 'go', root).onclick = async () => { const r = await licRedeem($('#' + pfx + 'c', root).value); if (!r.ok) { msg(r.msg); return; } msg(r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); onOk?.(); };
+  paintBtn();
+}
 function licCheck() {
   const st = licStatus(), old = document.getElementById('lic');
   if (st.mode !== 'locked') { old?.remove(); return; }
   if (old) return;
   const el = document.createElement('div'); el.id = 'lic';
-  el.innerHTML = `<div class="licbox"><h2>${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว'}</h2>
-    <p>โน้ตทั้งหมดของคุณยังอยู่ในเครื่องนี้ครบ ใส่รหัสปลดล็อกเพื่อใช้งานต่อ</p>
-    <textarea id="licc" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea>
-    <div id="licm" class="licm"></div>
-    <div class="licrow"><button class="btn o" id="licpaste">วางรหัส</button><button class="btn" id="licgo">ปลดล็อก</button></div>
-    <p class="sub">${esc(LIC.CONTACT)}</p></div>`;
-  document.body.append(el);
-  const msg = (t, ok) => { const m = $('#licm', el); m.textContent = t; m.className = 'licm' + (ok ? ' ok' : ''); };
-  $('#licpaste', el).onclick = async () => { try { $('#licc', el).value = await navigator.clipboard.readText(); } catch { msg('วางอัตโนมัติไม่ได้ กดค้างในช่องแล้วเลือก วาง'); } };
-  $('#licgo', el).onclick = async () => { const r = await licRedeem($('#licc', el).value); if (!r.ok) { msg(r.msg); return; } msg(`ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); setTimeout(licCheck, 900); };
+  el.innerHTML = `<div class="licbox"><h2>${st.why === 'expired' ? 'รหัสหมดอายุแล้ว' : 'หมดช่วงทดลองใช้แล้ว'}</h2><p class="licsub">โน้ตทั้งหมดของคุณยังอยู่ครบในเครื่องนี้ เลือกแพ็กเกจแล้วเล่นต่อได้ทันที</p>${licPage('lic', false)}</div>`;
+  document.body.append(el); licWire(el, 'lic', () => setTimeout(licCheck, 900));
 }
 function openLicence() {
   const st = licStatus();
-  const s = sheet(`<h3>สถานะการใช้งาน</h3><p class="sub" style="font-size:1rem;color:var(--ink)">${esc(licLeftText(st))}</p>
-    ${st.mode === 'owner' ? '' : `<p class="sub">ใส่รหัสเพื่อต่ออายุ (ถ้ามีรหัสเหลืออายุอยู่ จะนับต่อท้ายให้)</p><textarea class="field" id="lcc" rows="3" placeholder="วางรหัสที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="lcm" class="licm"></div><button class="btn" id="lcgo" style="width:100%">ใส่รหัส</button><p class="sub">${esc(LIC.CONTACT)}</p>`}`);
-  const go = $('#lcgo', s.el); if (go) go.onclick = async () => { const r = await licRedeem($('#lcc', s.el).value), m = $('#lcm', s.el); if (!r.ok) { m.textContent = r.msg; m.className = 'licm'; return; } m.textContent = r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ต่ออายุแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`; m.className = 'licm ok'; };
+  const s = sheet(`<h3>สถานะการใช้งาน</h3><p class="licnow">${esc(licLeftText(st))}</p>${st.mode === 'owner' ? '' : licPage('lc', true)}`);
+  if (st.mode !== 'owner') licWire(s.el, 'lc');
 }
 /* owner tools: reached by tapping the title of "ข้อมูลและพื้นที่" seven times */
 const ownerGet = () => { try { return JSON.parse(localStorage.getItem(LIC.OWNER) || 'null'); } catch { return null; } };
@@ -1860,11 +1892,11 @@ function openOwner() {
     : `<p class="sub">เครื่องนี้เป็นเครื่องเจ้าของ ใช้ฟรีตลอด</p>
       <p class="sub">กุญแจตรวจรหัส (ส่งให้ผู้พัฒนาฝังในแอป ไม่ใช่ความลับ):</p><textarea class="field" readonly rows="2" id="ownPub">${esc(o.pub)}</textarea><button class="btn o sm" data-o="cpub">คัดลอกกุญแจตรวจรหัส</button>
       <h3 style="margin-top:16px">ออกรหัสให้ผู้ใช้</h3>
-      <div class="pills" id="ownDur">${[[7, '7 วัน'], [30, '1 เดือน'], [90, '3 เดือน'], [365, '1 ปี'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
+      <div class="pills" id="ownDur">${[[7, 'ทดลอง 7 วัน'], [30, '1 เดือน'], [90, '3 เดือน'], [180, '6 เดือน'], [365, '1 ปี'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
       <input class="field" id="ownNote" placeholder="ชื่อผู้ใช้ (จดไว้เอง ไม่ใส่ก็ได้)" maxlength="40" style="margin-top:8px">
       <button class="btn" data-o="issue" style="width:100%;margin-top:8px">ออกรหัส</button>
       <div id="ownOut"></div>
-      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : x.days + ' วัน'} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอก</button></div>`).join('')}</div>` : ''}
+      ${list.length ? `<h3 style="margin-top:16px">รหัสที่เคยออก (${list.length})</h3><div class="ownlist">${list.slice(0, 30).map((x, i) => `<div class="lrow"><div class="nm">${esc(x.note || '(ไม่ได้ใส่ชื่อ)')}<small>${x.days >= 3650 ? '10 ปี' : ({ 30: '1 เดือน', 90: '3 เดือน', 180: '6 เดือน', 365: '1 ปี' })[x.days] || (x.days + ' วัน')} · ออกเมื่อ ${dayStr(x.day)}</small></div><button class="btn o sm" data-o="cp" data-i="${i}">คัดลอก</button></div>`).join('')}</div>` : ''}
       <h3 style="margin-top:16px">กุญแจสำรอง (ลับ!)</h3><p class="sub">เก็บไว้ที่ปลอดภัย (เช่นโน้ตส่วนตัว) ถ้ากุญแจหายและไม่มีสำรอง จะออกรหัสใหม่ที่ใช้กับแอปนี้ไม่ได้อีก ห้ามส่งให้ใคร</p>
       <button class="btn o sm" data-o="bak">คัดลอกกุญแจสำรอง</button>`;
   };
