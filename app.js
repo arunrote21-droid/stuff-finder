@@ -1826,7 +1826,7 @@ function plansHTML(sel) {
     return `<button class="plan${i === sel ? ' on' : ''}${p.badge ? ' hot' : ''}" data-p="${i}">${p.badge ? `<span class="bdg">${p.badge}</span>` : ''}
       <div class="pl"><b>${p.name}</b>${f.pct ? `<span class="sv">ประหยัด ${f.pct}%</span>` : `<span class="tg">${p.tag || ''}</span>`}</div>
       <div class="pr">${f.pct ? `<s>${f.full}</s>` : ''}<strong>${p.price}</strong><em>บาท</em></div>
-      <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>${f.per} บาท/เดือน</b> · ลดไป ${f.save} บาท${p.m === 12 ? ` · ตกวันละ ${f.day} บาท` : ''}` : `เดือนละ ${f.per} บาท เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
+      <div class="pm">${f.pct ? `เฉลี่ยเพียง <b>${f.per} บาท/เดือน</b>${p.m === 12 ? ` · ตกวันละ ${f.day} บาท` : ''}` : `เดือนละ ${f.per} บาท เปลี่ยนแพ็กเกจได้ทุกเมื่อ`}</div></button>`; }).join('')}</div>`;
 }
 function licPage(pfx, collapsed) {
   const code = `<textarea id="${pfx}c" rows="3" placeholder="วางรหัสปลดล็อกที่นี่" autocomplete="off" autocapitalize="off" spellcheck="false"></textarea><div id="${pfx}m" class="licm"></div>
