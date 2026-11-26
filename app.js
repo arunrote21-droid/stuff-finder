@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-k';
+const BUILD = 'sheet-2026-11-26-l';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1858,7 +1858,7 @@ function licWire(root, pfx, onOk) {
   const paintBtn = () => { const p = LIC.PLANS[sel]; btn.querySelector('.lctx').textContent = `แจ้งซื้อแพ็กเกจ ${p.name} · ${p.price} บาท ทาง LINE`; root.querySelectorAll('.plan').forEach((b, i) => b.classList.toggle('on', i === sel)); };
   root.querySelectorAll('.plan').forEach(b => b.addEventListener('click', () => { sel = +b.dataset.p; paintBtn(); }));
   btn.addEventListener('click', async () => {
-    const p = LIC.PLANS[sel], text = `สวัสดีครับ ขอซื้อโน้ตเนตร แพ็กเกจ ${p.name} ราคา ${p.price} บาท`;
+    const p = LIC.PLANS[sel], text = `ซื้อโน้ตเนตร ${p.name} ${p.price} บาท`; // short and exact: it is also the keyword the LINE OA auto-replies to (keywords are limited to 30 characters)
     try { await navigator.clipboard.writeText(text); } catch { /* the link below still carries the text */ }
     const L = LIC.LINE; if (!L.id) { toast('ข้อความคัดลอกแล้ว วางส่งให้ผู้พัฒนาทาง LINE'); return; }
     location.href = L.oa ? `https://line.me/R/oaMessage/${L.id}/?${encodeURIComponent(text)}` : `https://line.me/ti/p/~${L.id.replace(/^@/, '')}`;
