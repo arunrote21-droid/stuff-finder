@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-t';
+const BUILD = 'sheet-2026-11-26-u';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1822,6 +1822,7 @@ const licPub = () => LIC.PUB || (location.hostname === 'localhost' ? (window.__l
 let ownerOK = false; const isOwner = () => ownerOK;
 async function ownerCheck() { // the owner device must hold the private key that really matches LIC.PUB (a public key alone proves nothing)
   ownerOK = false; const o = ownerGet(), pub = licPub(); if (!o || !pub) return;
+  try { if (localStorage.getItem('sheet:ownerOff') === '1') return; } catch { /* blocked */ } // the owner is trying the app as a customer
   try {
     const priv = await crypto.subtle.importKey('jwk', o.priv, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']), pk = await crypto.subtle.importKey('raw', b64u.dec(pub), { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
     const ch = crypto.getRandomValues(new Uint8Array(16)), sig = await crypto.subtle.sign({ name: 'ECDSA', hash: 'SHA-256' }, priv, ch);
@@ -1959,12 +1960,14 @@ ${code}
 async function copyText(t) { try { await navigator.clipboard.writeText(t); toast('คัดลอกแล้ว'); } catch { toast('คัดลอกไม่ได้ กดค้างที่ข้อความแล้วเลือกคัดลอก'); } }
 function openOwner(onclose) {
   const paint = () => {
-    const o = ownerGet(); let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
+    const o = ownerGet(); let asClient = false; try { asClient = localStorage.getItem('sheet:ownerOff') === '1'; } catch { /* blocked */ } let list = []; try { list = JSON.parse(localStorage.getItem(LIC.ISSUED) || '[]'); } catch { /* none */ }
     box.innerHTML = !o ? `<p class="sub">ตั้งเครื่องนี้เป็น <b>เครื่องเจ้าของ</b> เพื่อออกรหัสปลดล็อกให้ผู้ใช้ เครื่องเจ้าของใช้ฟรีตลอด ไม่ถูกล็อก</p>
       <button class="btn" data-o="make" style="width:100%">ตั้งเครื่องนี้เป็นเครื่องเจ้าของ</button>
       <p class="sub" style="margin-top:14px">เปลี่ยนเครื่องหรือมีกุญแจสำรองอยู่แล้ว วางกุญแจสำรองที่นี่:</p>
       <textarea class="field" id="ownImp" rows="3" placeholder="วางกุญแจสำรอง" spellcheck="false"></textarea><button class="btn o" data-o="imp" style="width:100%;margin-top:8px">ใช้กุญแจสำรองนี้</button>`
-    : `<p class="sub">เครื่องนี้เป็นเครื่องเจ้าของ ใช้ฟรีตลอด</p>
+    : `<div class="ownmode"><b>${asClient ? 'ตอนนี้ทดลองเป็นลูกค้าอยู่' : 'ทดลองเป็นลูกค้า'}</b><p class="sub" style="margin:2px 0 8px">${asClient ? 'แอปทำตัวเหมือนลูกค้าใหม่บนเครื่องนี้' : 'ปิดสิทธิ์เจ้าของชั่วคราว เพื่อดูสิ่งที่ลูกค้าเห็น'}</p>
+      ${asClient ? '<button class="btn" data-o="asowner" style="width:100%">กลับเป็นเจ้าของ</button><div class="row2" style="margin-top:8px"><button class="btn o" data-o="resettrial">ทดลอง 14 วันใหม่</button><button class="btn o" data-o="fakeend">จำลองหมดช่วงทดลอง</button></div>' : '<button class="btn o" data-o="asclient" style="width:100%">ทดลองเป็นลูกค้า</button>'}</div>
+      <p class="sub">เครื่องนี้เป็นเครื่องเจ้าของ ใช้ฟรีตลอด</p>
       <p class="sub">กุญแจตรวจรหัส (ส่งให้ผู้พัฒนาฝังในแอป ไม่ใช่ความลับ):</p><textarea class="field" readonly rows="2" id="ownPub">${esc(o.pub)}</textarea><button class="btn o sm" data-o="cpub">คัดลอกกุญแจตรวจรหัส</button>
       <h3 style="margin-top:16px">ออกรหัสให้ผู้ใช้</h3>
       <div class="pills" id="ownDur">${[[7, 'ทดลอง 7 วัน'], [30, '1 เดือน'], [90, '3 เดือน'], [180, '6 เดือน'], [365, '1 ปี'], [3650, '10 ปี']].map(([d, t]) => `<button data-d="${d}" class="${d === 30 ? 'on' : ''}">${t}</button>`).join('')}</div>
@@ -1986,6 +1989,10 @@ function openOwner(onclose) {
     try {
       if (a === 'make') { if (await confirmDel('ตั้งเป็นเครื่องเจ้าของ?', 'เครื่องนี้จะใช้ฟรีตลอดและออกรหัสได้ อย่าลืมคัดลอกกุญแจสำรองเก็บไว้ (ล้างข้อมูลเว็บแล้วกุญแจจะหาย)', 'ตั้งเลย')) { await ownerCreate(); paint(); await ownerCheck(); licCheck(true); } }
       else if (a === 'imp') { const t = $('#ownImp', s.el).value.trim(); const o = JSON.parse(t); if (!o.priv || !o.pub) throw new Error('x'); localStorage.setItem(LIC.OWNER, JSON.stringify(o)); await ownerCheck(); paint(); licCheck(true); }
+      else if (a === 'asclient') { localStorage.setItem('sheet:ownerOff', '1'); await ownerCheck(); paint(); licCheck(false); toast('ตอนนี้ทดลองเป็นลูกค้า'); }
+      else if (a === 'asowner') { localStorage.removeItem('sheet:ownerOff'); await ownerCheck(); paint(); licCheck(true); toast('กลับเป็นเจ้าของแล้ว'); }
+      else if (a === 'resettrial') { licPut({}); licCheck(true); toast('เริ่มทดลอง 14 วันใหม่'); }
+      else if (a === 'fakeend') { licPut({ start: dayNum() - LIC.TRIAL_DAYS - 1 }); s.close(); licCheck(true); } // the lock screen covers everything; tap its logo 7 times to come back to this menu
       else if (a === 'cpub') copyText(ownerGet().pub);
       else if (a === 'bak') copyText(JSON.stringify(ownerGet()));
       else if (a === 'issue') { let dev = null; if (bind) { dev = b32dec($('#ownDev', s.el).value); if (!dev) { toast('รหัสเครื่องไม่ถูกต้อง ต้องมี 8 ตัวอักษร เช่น K7QM-4TDA'); return; } } const code = await ownerIssue(dur, $('#ownNote', s.el).value.trim(), 90, dev); paint(); $('#ownOut', s.el).innerHTML = `<p class="sub" style="margin-top:10px">รหัสที่ได้ (วันนับตั้งแต่วันที่ออกรหัสนี้ ลูกค้าควรใส่ในแอปโดยเร็ว):</p><button class="btn" data-o="cmsg" data-days="${dur}" style="width:100%;margin-bottom:8px">คัดลอกข้อความพร้อมส่ง (รหัส + วิธีใช้)</button><textarea class="field" readonly rows="3" id="ownCode">${esc(code)}</textarea><button class="btn o sm" data-o="ccode">คัดลอกเฉพาะรหัส</button>`; }

@@ -595,3 +595,4 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .sheet .grab::before{content:'';position:absolute;left:-60px;right:-60px;top:-12px;bottom:-14px}
 .sheet .sx{position:sticky;top:6px;float:right;z-index:6;width:38px;height:38px;margin:-4px -4px 0 8px;border-radius:50%;background:rgba(255,255,255,.12);color:var(--ink);font-size:1.05rem;line-height:1;display:grid;place-items:center;border:1px solid rgba(255,255,255,.14)}
 .sheet .sx:active{background:rgba(255,255,255,.24)}
+.ownmode{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.1);border-radius:16px;padding:12px 14px;margin-bottom:10px}
