@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-26-zd';
+const BUILD = 'sheet-2026-11-27-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -693,6 +693,9 @@ function openMenu() {
   })();
   const row = (m, ic, t, sub, tog) => `<button data-m="${m}"${tog ? ' class="tg"' : ''}><span class="ic">${ic}</span><span class="mt">${t}<small>${sub}</small></span>${tog ? `<span class="sw${tog === 'on' ? ' on' : ''}"><i></i></span>` : '<span class="chev">›</span>'}</button>`;
   const s = sheet(`<h3>เมนู</h3><div class="menu">${card}
+    <div class="mg">เริ่มต้นใช้งาน</div><div class="mcard">
+      ${row('help', '？', 'วิธีใช้งาน', 'ติดตั้ง เพิ่มเพลง คิว ชุดเพลง เขียนโน้ต ดูย้อนหลังได้ทุกเมื่อ')}
+    </div>
     <div class="mg">โน้ตของฉัน</div><div class="mcard">
       ${row('import', '⤓', 'นำเข้าโน้ต', 'ZIP หรือรูปจากแอปไฟล์ / iCloud')}
       ${row('manage', '✎', 'จัดการเพลง', `${S.songs.size} เพลง · เปลี่ยนชื่อ ดูตัวอย่าง ลบ`)}
@@ -717,7 +720,7 @@ function openMenu() {
   s.el.addEventListener('click', e => {
     const b = e.target.closest('[data-m]'); if (!b) return; const m = b.dataset.m;
     if (TOG[m]) { TOG[m][0](); b.querySelector('.sw').classList.toggle('on', !!TOG[m][1]()); return; } // switches change in place, the menu stays open
-    s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, topbar: openTopBar, wish: openWish, remote: openRemoteTest, info: openInfo, lic: openLicence })[m]();
+    s.close(); ({ import: openImport, sets: openSets, manage: openManage, backup: doBackup, topbar: openTopBar, wish: openWish, remote: openRemoteTest, info: openInfo, lic: openLicence, help: () => openHelp() })[m]();
   });
 }
 
@@ -1932,6 +1935,80 @@ function licWire(root, pfx, onOk) {
   $('#' + pfx + 'go', root).onclick = async () => { const r = await licRedeem($('#' + pfx + 'c', root).value); if (!r.ok) { msg(r.msg); return; } msg(r.again ? 'รหัสนี้ใส่ไปแล้ว ไม่นับซ้ำ' : `ปลดล็อกแล้ว ใช้ได้ถึง ${dayStr(r.exp)}`, true); onOk?.(); };
   paintBtn();
 }
+
+/* ───────────── first-run welcome + how-to (reachable any time from the menu) ───────────── */
+const WELCOME = 'sheet:welcome';
+function envInfo() {
+  const ua = navigator.userAgent || '', mac = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return { standalone: navigator.standalone === true || matchMedia('(display-mode: standalone)').matches,
+    inapp: /Line\/|FBAN|FBAV|FB_IAB|Instagram|MicroMessenger|TikTok|musical_ly/i.test(ua),
+    ipad: /iPad/.test(ua) || mac, ios: /iPhone|iPad|iPod/.test(ua) || mac, android: /Android/i.test(ua) };
+}
+const HIC = {
+  share: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 3v11M8 7l4-4 4 4M6 11H5a1 1 0 0 0-1 1v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8a1 1 0 0 0-1-1h-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  add: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4" fill="none" stroke="currentColor" stroke-width="2"/><path d="M12 8v8M8 12h8" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+  dots: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="5" cy="12" r="1.8" fill="currentColor"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/><circle cx="19" cy="12" r="1.8" fill="currentColor"/></svg>',
+  safari: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 8.5l-2 5-5 2 2-5z" fill="currentColor"/></svg>',
+  ok: '<svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+};
+const hstep = (n, ic, t, sub) => `<li class="hst"><span class="hn">${n}</span><span class="hi">${ic}</span><span class="ht"><b>${t}</b>${sub ? `<small>${sub}</small>` : ''}</span></li>`;
+function installHtml(env = envInfo(), short = false) {
+  if (env.standalone) return `<div class="hdone"><span>${HIC.ok}</span><div><b>ติดตั้งแล้ว</b><small>คุณกำลังใช้โน้ตเนตรจากหน้าจอโฮม ไม่ต้องทำอะไรเพิ่ม</small></div></div>`;
+  const keep = '<p class="hnote"><b>ติดตั้งก่อน แล้วค่อยเพิ่มเพลง</b> โน้ตที่เพิ่มในหน้าเว็บ Safari จะไม่ย้ายตามไปที่แอปบนหน้าจอโฮม ให้เปิดจากไอคอนบนหน้าจอโฮมแล้วจึงนำเข้าเพลง</p>';
+  const safari = (env.ipad
+    ? hstep(1, HIC.share, 'แตะปุ่ม “แชร์”', 'ลูกศรชี้ขึ้นออกจากกล่อง อยู่มุมขวาบนของ Safari (ถ้าไม่เห็นให้แตะ ⋯ ก่อน)')
+    : hstep(1, HIC.share, 'แตะปุ่ม “แชร์”', 'ลูกศรชี้ขึ้นออกจากกล่อง อยู่แถบด้านล่างของ Safari (ถ้าไม่เห็นให้แตะ ⋯ ก่อน)'))
+    + hstep(2, HIC.add, 'เลื่อนลง แล้วแตะ “เพิ่มลงหน้าจอโฮม”', 'ถ้าไม่เจอ ให้แตะ “ดูเพิ่มเติม” ในรายการ')
+    + hstep(3, HIC.ok, 'แตะ “เพิ่ม” มุมขวาบน', 'จะได้ไอคอนโน้ตเนตรบนหน้าจอโฮม เปิดจากไอคอนนั้นได้เลย');
+  if (env.inapp) return `<div class="hwarn">คุณเปิดอยู่ในแอปอื่น (LINE / Facebook ฯลฯ) ติดตั้งจากตรงนี้ไม่ได้ ต้องเปิดใน Safari ก่อน</div><ol class="hsteps">${hstep(1, HIC.dots, 'แตะปุ่ม “⋯” หรือไอคอนเข็มทิศ', 'อยู่มุมขวาบนหรือล่างของหน้าจอ')}${hstep(2, HIC.safari, 'เลือก “เปิดใน Safari”', 'หรือแตะปุ่มด้านล่างเพื่อคัดลอกลิงก์ไปวางใน Safari')}</ol><button class="btn o hcopy" type="button">คัดลอกลิงก์ของแอป</button>${short ? '<p class="hnote">พอเปิดใน Safari แล้ว แอปจะแนะนำขั้นตอนเพิ่มลงหน้าจอโฮมให้ต่อทันที</p>' : `<p class="hnote">หลังเปิดใน Safari แล้ว ทำตามขั้นตอนติดตั้งด้านล่างนี้</p><ol class="hsteps">${safari}</ol>${keep}`}`;
+  if (env.android) return `<ol class="hsteps">${hstep(1, HIC.dots, 'แตะเมนู “⋮” มุมขวาบนของ Chrome', '')}${hstep(2, HIC.add, 'เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”', '')}${hstep(3, HIC.ok, 'ยืนยัน แล้วเปิดแอปจากไอคอนบนหน้าจอ', '')}</ol>${keep}`;
+  if (env.ios) return `<ol class="hsteps">${safari}</ol>${keep}`;
+  return `<p class="hnote">แอปใช้ได้เลยในเบราว์เซอร์นี้ ถ้าใช้บน iPad หรือ iPhone ให้เปิดลิงก์นี้ใน <b>Safari</b> แล้วเพิ่มลงหน้าจอโฮม</p><ol class="hsteps">${safari}</ol>`;
+}
+function wireCopy(root) { const b = $('.hcopy', root); if (b) b.onclick = async () => { try { await navigator.clipboard.writeText(location.origin + location.pathname); toast('คัดลอกลิงก์แล้ว นำไปวางใน Safari'); } catch { toast('คัดลอกไม่ได้ ให้กดค้างที่ลิงก์ในแถบที่อยู่'); } }; }
+const ADD_HTML = `<ul class="hlist">
+  <li><b>รูปจากคลังภาพ หรือไฟล์</b><small>แตะปุ่ม <span class="hk">⤓</span> มุมขวาบน แล้วเลือกรูปหรือไฟล์โน้ตจากเครื่อง</small></li>
+  <li><b>เลือกหลายรูปพร้อมกัน = เพลงเดียวหลายหน้า</b><small>เรียงหน้าตามชื่อไฟล์ ชื่อเพลงใช้ชื่อไฟล์ของรูปแรก ถ้าชื่อซ้ำแอปเติม (2) ให้เอง</small></li>
+  <li><b>ไฟล์ ZIP = หลายเพลงในครั้งเดียว</b><small>ใส่โน้ตแต่ละเพลงเป็นโฟลเดอร์ ชื่อโฟลเดอร์คือชื่อเพลง แอปจะแยกให้เอง และให้ดูรายการก่อนนำเข้า</small></li>
+  <li><b>มีไฟล์ชื่อเพลงอยู่แล้ว เข้าได้เลย ไม่ต้องตั้งชื่อ</b><small>ถ้าอยากเปลี่ยนชื่อทีหลัง: เมนู → จัดการเพลง หรือกดค้างที่ชื่อเพลงในผลค้นหา</small></li>
+  <li><b>โน้ตอยู่ในเครื่องคุณเท่านั้น</b><small>ไม่อัปโหลดขึ้นเซิร์ฟเวอร์ อยากเก็บกันหาย: เมนู → สำรองข้อมูล</small></li></ul>`;
+const HELP = [
+  ['ติดตั้งลงหน้าจอโฮม', null],
+  ['เพิ่มเพลงของคุณ', ADD_HTML],
+  ['เปิดเพลงและคิว', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">＋</span> ล่างขวา แล้วค้นหาเพลง</b><small>แตะที่เพลง = เพิ่มแล้วปิด กดค้าง = เพิ่มต่อได้หลายเพลง</small></li><li><b>“ถัดไป” กับ “ท้ายคิว”</b><small>ถัดไป = เล่นต่อจากเพลงที่เปิดอยู่ ท้ายคิว = ต่อท้ายรายการ โดยไม่ต้องปิดเพลงที่เล่นอยู่</small></li><li><b>เปลี่ยนหน้า / เปลี่ยนเพลง</b><small>ปัดหรือแตะขอบจอด้านซ้าย-ขวา หรือแตะป้าย “เพลงต่อไป” ด้านล่าง</small></li></ul>`],
+  ['ชุดเพลงสำหรับแต่ละงาน', `<ul class="hlist"><li><b>แตะ “＋ ชุดใหม่” ด้านบน</b><small>เริ่มชุดว่าง / พิมพ์รายการเพลง / บันทึกคิวที่มีเป็นชุด</small></li><li><b>วางรายชื่อเพลงจากไลน์ได้ทีเดียว</b><small>เลือก “พิมพ์รายการเพลง” แล้ววางทีละบรรทัด แอปหาโน้ตและเรียงให้เอง</small></li><li><b>กดค้างที่ชื่อชุด</b><small>เปลี่ยนชื่อ ล็อกชุดด้วยรหัส ส่งให้เพื่อน หรือลบ</small></li></ul>`],
+  ['เขียนโน้ตกำกับ', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">✎</span> ด้านบนตอนเปิดโน้ต</b><small>ปากกา ไฮไลต์ ยางลบ ครอปหน้า ย้อนกลับ/ทำซ้ำ เก็บรอยไว้กับหน้านั้น</small></li></ul>`],
+  ['ซื้อแพ็กเกจและใส่รหัส', `<ul class="hlist"><li><b>เมนู → แถบสถานะด้านบน</b><small>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</small></li><li><b>โอนแล้วส่งสลิปในแชต</b><small>ผู้พัฒนาส่งรหัสปลดล็อกกลับมา คัดลอกแล้ววางในช่อง “ได้รับรหัสแล้ว?” กด “ใส่รหัส”</small></li></ul>`]
+];
+function openHelp(first) {
+  const env = envInfo();
+  const body = HELP.map(([t, h], i) => `<details class="hsec"${i === (first || 0) ? ' open' : ''}><summary>${t}</summary>${h === null ? installHtml(env) : h}</details>`).join('');
+  const s = sheet(`<h3>วิธีใช้งาน</h3><p class="sub">แตะหัวข้อเพื่อเปิดอ่าน ดูซ้ำได้ทุกเมื่อจากเมนู</p><div class="hbody">${body}</div><button class="btn o hagain" type="button">ดูหน้าต้อนรับอีกครั้ง</button>`);
+  wireCopy(s.el); $('.hagain', s.el).onclick = () => { s.close(); openWelcome(); };
+}
+function maybeWelcome() {
+  try { if (localStorage.getItem(WELCOME)) return; } catch { return; }
+  if (S.songs.size > 0 || document.getElementById('lic') || document.querySelector('.scrim')) return; // only for a fresh install, never over the lock screen or another sheet
+  openWelcome();
+}
+function openWelcome() {
+  const env = envInfo(); let step = 0;
+  const pages = [
+    () => `<div class="wlogo"><img src="apple-touch-icon.png" alt="" width="72" height="72"></div><h3>ยินดีต้อนรับสู่ โน้ตเนตร</h3><p class="sub">แอปโน้ตเพลงสำหรับนักดนตรี ทดลองใช้ฟรี ${LIC.TRIAL_DAYS} วัน</p><div class="wben"><div><i>${HIC.ok}</i><span><b>เปิดเพลงต่อไปได้ทันที</b> ไม่ต้องปิดเพลงที่เล่นอยู่</span></div><div><i>${HIC.ok}</i><span><b>วางรายชื่อเพลงยาว ๆ</b> แอปเรียงให้เอง</span></div><div><i>${HIC.ok}</i><span><b>ปัดเปลี่ยนหน้าลื่น</b> ใช้ได้โดยไม่ต้องต่อเน็ต</span></div></div>`,
+    () => `<h3>ติดตั้งลงหน้าจอโฮม</h3><p class="sub">เปิดได้เร็วเหมือนแอปทั่วไป ใช้เวลาไม่ถึงนาที</p>${installHtml(env, true)}`,
+    () => `<h3>เพิ่มเพลงของคุณ</h3><p class="sub">เลือกได้หลายแบบ</p>${ADD_HTML}`
+  ];
+  const list = env.standalone ? [pages[0], pages[2]] : pages;
+  const s = sheet(`<div class="wpage"></div><div class="wdots"></div><div class="wbtns"><button class="btn o" id="wskip" type="button">ข้าม</button><button class="btn" id="wnext" type="button"></button></div>`, { onclose: () => { try { localStorage.setItem(WELCOME, '1'); } catch { /* ok */ } } });
+  const paint = () => {
+    $('.wpage', s.el).innerHTML = list[step](); wireCopy(s.el);
+    $('.wdots', s.el).innerHTML = list.map((_, i) => `<i class="${i === step ? 'on' : ''}"></i>`).join('');
+    const last = step === list.length - 1; $('#wnext', s.el).textContent = last ? 'เลือกโน้ตจากเครื่อง' : 'ถัดไป'; $('#wskip', s.el).textContent = last ? 'ไว้ทีหลัง' : 'ข้าม';
+  };
+  $('#wnext', s.el).onclick = () => { if (step < list.length - 1) { step++; paint(); } else { s.close(); quickPick(); } };
+  $('#wskip', s.el).onclick = () => s.close();
+  paint();
+}
 function licCheck(allowLock) { // allowLock: only when the app is opened or comes back after a long time away, never in the middle of playing
   const st = licStatus(), old = document.getElementById('lic');
   if (st.mode !== 'locked') { old?.remove(); return; }
@@ -2038,7 +2115,7 @@ function openOwner(onclose) {
     dd.addEventListener('click', e => { e.stopPropagation(); const song = curSong(); if (!song) return; if (DOT.off.has(song.id)) DOT.off.delete(song.id); else DOT.off.add(song.id); dotPaint(); }); }
   sv.id = 'annsvg'; $('#inner').append(sv); { const sn = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); sn.id = 'annsvgn'; $('#inner').append(sn); } $('#pg').addEventListener('load', () => { measureDark(); annRender(); }); buildEtb(); }
   wishLoad(); aliasLoad();
-  applyTop(); loadState(); renderAll(); chromeArm(); ownerCheck().then(() => licCheck(true)); { let away = 0; document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') away = Date.now(); else if (away && Date.now() - away > LIC.AWAY) { away = 0; licCheck(true); } else licCheck(false); }); }
+  applyTop(); loadState(); renderAll(); chromeArm(); ownerCheck().then(() => { licCheck(true); setTimeout(maybeWelcome, 700); }); { let away = 0; document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') away = Date.now(); else if (away && Date.now() - away > LIC.AWAY) { away = 0; licCheck(true); } else licCheck(false); }); }
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
   window.__sheet = { S, DB, CROP, inkBox, ANN, lic: { ownerCreate, ownerIssue, licStatus, licRedeem, dayNum, devId, b32dec, b32enc } };
 })();
