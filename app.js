@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-27-b';
+const BUILD = 'sheet-2026-11-27-c';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1957,10 +1957,10 @@ function installHtml(env = envInfo(), short = false) {
   const keep = '<p class="hnote"><b>ติดตั้งก่อน แล้วค่อยเพิ่มเพลง</b> โน้ตที่เพิ่มในหน้าเว็บ Safari จะไม่ย้ายตามไปที่แอปบนหน้าจอโฮม ให้เปิดจากไอคอนบนหน้าจอโฮมแล้วจึงนำเข้าเพลง</p>';
   const safari = (env.ipad
     ? hstep(1, HIC.share, 'แตะปุ่ม “แชร์”', 'ลูกศรชี้ขึ้นออกจากกล่อง อยู่มุมขวาบนของ Safari (ถ้าไม่เห็นให้แตะ ⋯ ก่อน)')
-    : hstep(1, HIC.share, 'แตะปุ่ม “แชร์”', 'ลูกศรชี้ขึ้นออกจากกล่อง อยู่แถบด้านล่างของ Safari (ถ้าไม่เห็นให้แตะ ⋯ ก่อน)'))
+    : hstep(1, HIC.dots, 'แตะปุ่ม “⋯” แล้วเลือก “แชร์”', 'ปุ่ม ⋯ อยู่แถบด้านล่างของ Safari (บางรุ่นมีปุ่มแชร์รูปลูกศรออกจากกล่องให้แตะได้เลย)'))
     + hstep(2, HIC.add, 'เลื่อนลง แล้วแตะ “เพิ่มลงหน้าจอโฮม”', 'ถ้าไม่เจอ ให้แตะ “ดูเพิ่มเติม” ในรายการ')
-    + hstep(3, HIC.ok, 'แตะ “เพิ่ม” มุมขวาบน', 'จะได้ไอคอนโน้ตเนตรบนหน้าจอโฮม เปิดจากไอคอนนั้นได้เลย');
-  if (env.inapp) return `<div class="hwarn">คุณเปิดอยู่ในแอปอื่น (LINE / Facebook ฯลฯ) ติดตั้งจากตรงนี้ไม่ได้ ต้องเปิดใน Safari ก่อน</div><ol class="hsteps">${hstep(1, HIC.dots, 'แตะปุ่ม “⋯” หรือไอคอนเข็มทิศ', 'อยู่มุมขวาบนหรือล่างของหน้าจอ')}${hstep(2, HIC.safari, 'เลือก “เปิดใน Safari”', 'หรือแตะปุ่มด้านล่างเพื่อคัดลอกลิงก์ไปวางใน Safari')}</ol><button class="btn o hcopy" type="button">คัดลอกลิงก์ของแอป</button>${short ? '<p class="hnote">พอเปิดใน Safari แล้ว แอปจะแนะนำขั้นตอนเพิ่มลงหน้าจอโฮมให้ต่อทันที</p>' : `<p class="hnote">หลังเปิดใน Safari แล้ว ทำตามขั้นตอนติดตั้งด้านล่างนี้</p><ol class="hsteps">${safari}</ol>${keep}`}`;
+    + hstep(3, HIC.ok, 'แตะ “เพิ่ม” มุมขวาบน', 'เปิดสวิตช์ “เปิดเป็นแอปหน้าจอเว็บ” ไว้ แล้วจะได้ไอคอนโน้ตเนตรบนหน้าจอโฮม');
+  if (env.inapp) return `<div class="hwarn">คุณเปิดอยู่ในแอปอื่น (LINE / Facebook ฯลฯ) ติดตั้งจากตรงนี้ไม่ได้ ต้องเปิดใน Safari ก่อน</div><ol class="hsteps">${hstep(1, HIC.dots, 'แตะปุ่ม “⋯” หรือไอคอนเข็มทิศ', 'อยู่มุมขวาบนหรือล่างของหน้าจอ')}${hstep(2, HIC.safari, 'เลือก “เปิดในเบราว์เซอร์”', 'ใน LINE เขียนว่า “เปิดในเบราว์เซอร์” ใน Facebook อาจเขียนว่า “เปิดใน Safari” หรือแตะปุ่มด้านล่างเพื่อคัดลอกลิงก์ไปวางใน Safari')}</ol><button class="btn o hcopy" type="button">คัดลอกลิงก์ของแอป</button>${short ? '<p class="hnote">พอเปิดใน Safari แล้ว แอปจะแนะนำขั้นตอนเพิ่มลงหน้าจอโฮมให้ต่อทันที</p>' : `<p class="hnote">หลังเปิดใน Safari แล้ว ทำตามขั้นตอนติดตั้งด้านล่างนี้</p><ol class="hsteps">${safari}</ol>${keep}`}`;
   if (env.android) return `<ol class="hsteps">${hstep(1, HIC.dots, 'แตะเมนู “⋮” มุมขวาบนของ Chrome', '')}${hstep(2, HIC.add, 'เลือก “ติดตั้งแอป” หรือ “เพิ่มลงในหน้าจอหลัก”', '')}${hstep(3, HIC.ok, 'ยืนยัน แล้วเปิดแอปจากไอคอนบนหน้าจอ', '')}</ol>${keep}`;
   if (env.ios) return `<ol class="hsteps">${safari}</ol>${keep}`;
   return `<p class="hnote">แอปใช้ได้เลยในเบราว์เซอร์นี้ ถ้าใช้บน iPad หรือ iPhone ให้เปิดลิงก์นี้ใน <b>Safari</b> แล้วเพิ่มลงหน้าจอโฮม</p><ol class="hsteps">${safari}</ol>`;
@@ -1983,7 +1983,7 @@ const HELP = [
 ];
 function openHelp(first) {
   const env = envInfo();
-  const body = HELP.map(([t, h], i) => `<details class="hsec"${i === (first || 0) ? ' open' : ''}><summary>${t}</summary>${h === null ? installHtml(env) : h}</details>`).join('');
+  const body = HELP.map(([t, h], i) => `<details class="hsec"${i === (first || 0) ? ' open' : ''}><summary>${t}</summary>${h === null ? installHtml(env) + (env.standalone ? '' : clip('help-install', 'ติดตั้งลงหน้าจอโฮม')) : h}</details>`).join('');
   const s = sheet(`<h3>วิธีใช้งาน</h3><p class="sub">แตะหัวข้อเพื่อเปิดอ่าน ดูซ้ำได้ทุกเมื่อจากเมนู</p><div class="hbody">${body}</div><button class="btn o hagain" type="button">ดูหน้าต้อนรับอีกครั้ง</button>`);
   s.el.addEventListener('click', e => {
     const b = e.target.closest('.hplay'); if (!b) return;
