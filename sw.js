@@ -8,6 +8,7 @@ self.addEventListener('activate', e => {
 });
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
+  if (/\.mp4$/i.test(new URL(e.request.url).pathname) || e.request.headers.has('range')) return; // videos stream straight from the network (Safari needs range requests, a cached copy would break them)
   // wait at most 3 s for the network (weak signal on stage), then use the saved copy; the fresh one still lands in the cache
   const net = fetch(e.request, { cache: 'no-cache' }).then(r => { const c = r.clone(); caches.open(CACHE).then(x => x.put(e.request, c)); return r; });
   const saved = () => caches.match(e.request, { ignoreSearch: true });

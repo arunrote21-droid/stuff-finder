@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-27-a';
+const BUILD = 'sheet-2026-11-27-b';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1972,18 +1972,25 @@ const ADD_HTML = `<ul class="hlist">
   <li><b>ไฟล์ ZIP = หลายเพลงในครั้งเดียว</b><small>ใส่โน้ตแต่ละเพลงเป็นโฟลเดอร์ ชื่อโฟลเดอร์คือชื่อเพลง แอปจะแยกให้เอง และให้ดูรายการก่อนนำเข้า</small></li>
   <li><b>มีไฟล์ชื่อเพลงอยู่แล้ว เข้าได้เลย ไม่ต้องตั้งชื่อ</b><small>ถ้าอยากเปลี่ยนชื่อทีหลัง: เมนู → จัดการเพลง หรือกดค้างที่ชื่อเพลงในผลค้นหา</small></li>
   <li><b>โน้ตอยู่ในเครื่องคุณเท่านั้น</b><small>ไม่อัปโหลดขึ้นเซิร์ฟเวอร์ อยากเก็บกันหาย: เมนู → สำรองข้อมูล</small></li></ul>`;
+const clip = (f, t) => `<button type="button" class="hplay" data-clip="${f}"><span>▶</span> ดูคลิปสั้น · ${t}</button>`;
 const HELP = [
   ['ติดตั้งลงหน้าจอโฮม', null],
-  ['เพิ่มเพลงของคุณ', ADD_HTML],
-  ['เปิดเพลงและคิว', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">＋</span> ล่างขวา แล้วค้นหาเพลง</b><small>แตะที่เพลง = เพิ่มแล้วปิด กดค้าง = เพิ่มต่อได้หลายเพลง</small></li><li><b>“ถัดไป” กับ “ท้ายคิว”</b><small>ถัดไป = เล่นต่อจากเพลงที่เปิดอยู่ ท้ายคิว = ต่อท้ายรายการ โดยไม่ต้องปิดเพลงที่เล่นอยู่</small></li><li><b>เปลี่ยนหน้า / เปลี่ยนเพลง</b><small>ปัดหรือแตะขอบจอด้านซ้าย-ขวา หรือแตะป้าย “เพลงต่อไป” ด้านล่าง</small></li></ul>`],
-  ['ชุดเพลงสำหรับแต่ละงาน', `<ul class="hlist"><li><b>แตะ “＋ ชุดใหม่” ด้านบน</b><small>เริ่มชุดว่าง / พิมพ์รายการเพลง / บันทึกคิวที่มีเป็นชุด</small></li><li><b>วางรายชื่อเพลงจากไลน์ได้ทีเดียว</b><small>เลือก “พิมพ์รายการเพลง” แล้ววางทีละบรรทัด แอปหาโน้ตและเรียงให้เอง</small></li><li><b>กดค้างที่ชื่อชุด</b><small>เปลี่ยนชื่อ ล็อกชุดด้วยรหัส ส่งให้เพื่อน หรือลบ</small></li></ul>`],
-  ['เขียนโน้ตกำกับ', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">✎</span> ด้านบนตอนเปิดโน้ต</b><small>ปากกา ไฮไลต์ ยางลบ ครอปหน้า ย้อนกลับ/ทำซ้ำ เก็บรอยไว้กับหน้านั้น</small></li></ul>`],
+  ['เพิ่มเพลงของคุณ', ADD_HTML + clip('help-add-photos', 'เพิ่มจากรูปหรือไฟล์') + clip('help-add-zip', 'เพิ่มหลายเพลงด้วย ZIP')],
+  ['เปิดเพลงและคิว', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">＋</span> ล่างขวา แล้วค้นหาเพลง</b><small>แตะที่เพลง = เพิ่มแล้วปิด กดค้าง = เพิ่มต่อได้หลายเพลง</small></li><li><b>“ถัดไป” กับ “ท้ายคิว”</b><small>ถัดไป = เล่นต่อจากเพลงที่เปิดอยู่ ท้ายคิว = ต่อท้ายรายการ โดยไม่ต้องปิดเพลงที่เล่นอยู่</small></li><li><b>เปลี่ยนหน้า / เปลี่ยนเพลง</b><small>ปัดหรือแตะขอบจอด้านซ้าย-ขวา หรือแตะป้าย “เพลงต่อไป” ด้านล่าง</small></li></ul>${clip('help-queue', 'เปิดเพลงต่อไป')}`],
+  ['ชุดเพลงสำหรับแต่ละงาน', `<ul class="hlist"><li><b>แตะ “＋ ชุดใหม่” ด้านบน</b><small>เริ่มชุดว่าง / พิมพ์รายการเพลง / บันทึกคิวที่มีเป็นชุด</small></li><li><b>วางรายชื่อเพลงจากไลน์ได้ทีเดียว</b><small>เลือก “พิมพ์รายการเพลง” แล้ววางทีละบรรทัด แอปหาโน้ตและเรียงให้เอง</small></li><li><b>กดค้างที่ชื่อชุด</b><small>เปลี่ยนชื่อ ล็อกชุดด้วยรหัส ส่งให้เพื่อน หรือลบ</small></li></ul>${clip('help-sets', 'สร้างชุดเพลง')}`],
+  ['เขียนโน้ตกำกับ', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">✎</span> ด้านบนตอนเปิดโน้ต</b><small>ปากกา ไฮไลต์ ยางลบ ครอปหน้า ย้อนกลับ/ทำซ้ำ เก็บรอยไว้กับหน้านั้น</small></li></ul>${clip('help-annotate', 'เขียนโน้ต')}`],
   ['ซื้อแพ็กเกจและใส่รหัส', `<ul class="hlist"><li><b>เมนู → แถบสถานะด้านบน</b><small>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</small></li><li><b>โอนแล้วส่งสลิปในแชต</b><small>ผู้พัฒนาส่งรหัสปลดล็อกกลับมา คัดลอกแล้ววางในช่อง “ได้รับรหัสแล้ว?” กด “ใส่รหัส”</small></li></ul>`]
 ];
 function openHelp(first) {
   const env = envInfo();
   const body = HELP.map(([t, h], i) => `<details class="hsec"${i === (first || 0) ? ' open' : ''}><summary>${t}</summary>${h === null ? installHtml(env) : h}</details>`).join('');
   const s = sheet(`<h3>วิธีใช้งาน</h3><p class="sub">แตะหัวข้อเพื่อเปิดอ่าน ดูซ้ำได้ทุกเมื่อจากเมนู</p><div class="hbody">${body}</div><button class="btn o hagain" type="button">ดูหน้าต้อนรับอีกครั้ง</button>`);
+  s.el.addEventListener('click', e => {
+    const b = e.target.closest('.hplay'); if (!b) return;
+    const v = document.createElement('video'); v.src = b.dataset.clip + '.mp4'; v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'metadata'; v.className = 'hvid';
+    v.onerror = () => { v.replaceWith(Object.assign(document.createElement('p'), { className: 'hnote', textContent: 'เปิดคลิปไม่ได้ ต้องต่ออินเทอร์เน็ตตอนดูคลิป (ข้อความอธิบายด้านบนใช้ออฟไลน์ได้)' })); };
+    b.replaceWith(v);
+  });
   wireCopy(s.el); $('.hagain', s.el).onclick = () => { s.close(); openWelcome(); };
 }
 function maybeWelcome() {
