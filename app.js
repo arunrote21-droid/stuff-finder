@@ -7,7 +7,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2, 10));
 const nfc = s => String(s).normalize('NFC');
 const collator = new Intl.Collator('th', { numeric: true, sensitivity: 'base' });
-const BUILD = 'sheet-2026-11-27-c';
+const BUILD = 'sheet-2026-11-28-a';
 /* quiet activity log: the last events are kept so we can see what happened before a freeze */
 const LOG = { a: [], prev: [], prevClean: true };
 try { LOG.prev = JSON.parse(localStorage.getItem('sheet:log') || '[]'); LOG.prevClean = localStorage.getItem('sheet:clean') !== '0'; localStorage.setItem('sheet:clean', '0'); } catch { /* storage blocked */ }
@@ -1981,16 +1981,23 @@ const HELP = [
   ['เขียนโน้ตกำกับ', `<ul class="hlist"><li><b>แตะปุ่ม <span class="hk">✎</span> ด้านบนตอนเปิดโน้ต</b><small>ปากกา ไฮไลต์ ยางลบ ครอปหน้า ย้อนกลับ/ทำซ้ำ เก็บรอยไว้กับหน้านั้น</small></li></ul>${clip('help-annotate', 'เขียนโน้ต')}`],
   ['ซื้อแพ็กเกจและใส่รหัส', `<ul class="hlist"><li><b>เมนู → แถบสถานะด้านบน</b><small>เลือกแพ็กเกจ แล้วกด “แจ้งซื้อทาง LINE” จะได้ QR โอนเงินกลับมา</small></li><li><b>โอนแล้วส่งสลิปในแชต</b><small>ผู้พัฒนาส่งรหัสปลดล็อกกลับมา คัดลอกแล้ววางในช่อง “ได้รับรหัสแล้ว?” กด “ใส่รหัส”</small></li></ul>`]
 ];
+function playClip(name) { // a full-screen player on top of everything, sized to the screen, closes with the X or a tap outside
+  const o = document.createElement('div'); o.className = 'vlb';
+  o.innerHTML = '<button type="button" class="vx" aria-label="ปิดคลิป">✕</button>';
+  const v = document.createElement('video'); v.src = name + '.mp4'; v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true; v.setAttribute('webkit-playsinline', ''); v.preload = 'auto';
+  v.addEventListener('loadedmetadata', () => { if (v.videoWidth) v.style.aspectRatio = v.videoWidth + ' / ' + v.videoHeight; });
+  v.onerror = () => { close(); toast('เปิดคลิปไม่ได้ ต้องต่ออินเทอร์เน็ตตอนดูคลิป'); };
+  o.append(v); document.body.append(o);
+  const onKey = e => { if (e.key === 'Escape') close(); };
+  function close() { document.removeEventListener('keydown', onKey); try { v.pause(); } catch { /* ok */ } o.remove(); }
+  o.addEventListener('click', e => { if (e.target === o || e.target.closest('.vx')) close(); });
+  document.addEventListener('keydown', onKey);
+}
 function openHelp(first) {
   const env = envInfo();
   const body = HELP.map(([t, h], i) => `<details class="hsec"${i === (first || 0) ? ' open' : ''}><summary>${t}</summary>${h === null ? installHtml(env) + (env.standalone ? '' : clip('help-install', 'ติดตั้งลงหน้าจอโฮม')) : h}</details>`).join('');
   const s = sheet(`<h3>วิธีใช้งาน</h3><p class="sub">แตะหัวข้อเพื่อเปิดอ่าน ดูซ้ำได้ทุกเมื่อจากเมนู</p><div class="hbody">${body}</div><button class="btn o hagain" type="button">ดูหน้าต้อนรับอีกครั้ง</button>`);
-  s.el.addEventListener('click', e => {
-    const b = e.target.closest('.hplay'); if (!b) return;
-    const v = document.createElement('video'); v.src = b.dataset.clip + '.mp4'; v.controls = true; v.autoplay = true; v.muted = true; v.loop = true; v.playsInline = true; v.preload = 'metadata'; v.className = 'hvid';
-    v.onerror = () => { v.replaceWith(Object.assign(document.createElement('p'), { className: 'hnote', textContent: 'เปิดคลิปไม่ได้ ต้องต่ออินเทอร์เน็ตตอนดูคลิป (ข้อความอธิบายด้านบนใช้ออฟไลน์ได้)' })); };
-    b.replaceWith(v);
-  });
+  s.el.addEventListener('click', e => { const b = e.target.closest('.hplay'); if (b) playClip(b.dataset.clip); });
   wireCopy(s.el); $('.hagain', s.el).onclick = () => { s.close(); openWelcome(); };
 }
 function maybeWelcome() {

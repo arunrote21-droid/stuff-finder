@@ -642,3 +642,7 @@ mark{background:#42330f;color:var(--warn);border-radius:3px;padding:0 1px}
 .hplay{display:flex;align-items:center;gap:10px;width:100%;margin-top:10px;padding:12px 14px;border:1.5px solid var(--ac);border-radius:14px;background:rgba(52,211,153,.1);color:var(--ink);font:inherit;font-weight:700;cursor:pointer;text-align:left}
 .hplay span{flex:none;width:30px;height:30px;border-radius:50%;background:var(--ac);color:#04251a;display:grid;place-items:center;font-size:.8rem}
 .hvid{display:block;width:min(100%,300px);margin:10px auto 0;border-radius:14px;background:#000;max-height:60vh}
+
+.vlb{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.95);display:flex;align-items:center;justify-content:center;padding:10px}
+.vlb video{height:92vh;height:92dvh;max-width:100%;width:auto;object-fit:contain;background:#000;border-radius:12px}
+.vlb .vx{position:absolute;top:max(14px,env(safe-area-inset-top));right:14px;z-index:2;width:44px;height:44px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;font-size:1.2rem;cursor:pointer}
